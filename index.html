@@ -2,72 +2,95 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#0b0e13">
-  <title>TrackTheDrop — Field (v6)</title>
-  <link rel="stylesheet" href="./style.css?v=6">
+  <title>TrackTheDrop — Mobile</title>
+  <link rel="stylesheet" href="./style.css?v=7">
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand"><span class="dot"></span><span>TrackTheDrop</span></div>
-    <div class="actions">
-      <button id="fsBtn" class="ghost">Fullscreen</button>
-      <button id="torchBtn" class="ghost">Flashlight</button>
-      <label class="toggle"><input type="checkbox" id="alertToggle" checked><span>Alert on hit</span></label>
-    </div>
-  </header>
-
-  <main class="layout onlyViewport">
-    <section class="viewport" id="viewport">
-      <div class="hud"><span id="status">Ready</span><span id="fps">— fps</span></div>
+  <main class="app" id="app">
+    <section class="viewport fs" id="viewport">
       <video id="video" playsinline muted class="gray"></video>
       <canvas id="overlay" class="overlay"></canvas>
-      <div class="tap-hint" id="tapHint">Tap to Start</div>
       <div class="flash" id="flash"></div>
+
+      <!-- Minimal HUD -->
+      <div class="hud" id="hud">
+        <span id="status">Ready</span>
+        <span id="fps">— fps</span>
+      </div>
+
+      <!-- Floating top controls -->
+      <div class="topbar" id="topbar">
+        <button class="icon" id="exitFS" aria-label="Exit fullscreen">✕</button>
+        <div class="spacer"></div>
+        <button class="icon" id="installBtn" aria-label="Install app">⬇</button>
+      </div>
+
+      <!-- Bottom toolbar (large, thumb-friendly) -->
+      <nav class="toolbar" id="toolbar">
+        <button class="tool" id="startBtn">Start</button>
+        <button class="tool" id="torchBtn">Flashlight</button>
+        <button class="tool" id="alertBtn" aria-pressed="true">Alert: On</button>
+        <button class="tool" id="fsBtn">Fullscreen</button>
+      </nav>
+
+      <!-- Tap hint when stopped -->
+      <div class="tap-hint" id="tapHint">Tap to Start</div>
     </section>
 
-    <section class="panel compact">
-      <div class="card small">
-        <div class="row"><label>Overlay</label>
+    <!-- Compact settings drawer -->
+    <section class="drawer" id="drawer">
+      <header class="drawer-head">
+        <strong>Tracking</strong>
+        <button class="icon" id="closeDrawer">✕</button>
+      </header>
+      <div class="drawer-body">
+        <div class="row">
+          <label>Overlay</label>
           <select id="overlayMode">
-            <option value="debug" selected>Debug score</option>
+            <option value="debug">Debug score</option>
             <option value="blend">Blend</option>
             <option value="contour">Contour</option>
-            <option value="mask">Mask</option>
+            <option value="mask" selected>Mask</option>
           </select>
         </div>
-        <div class="row"><label>Opacity <span id="opVal">0.87</span></label><input type="range" id="opacity" min="20" max="100" value="87"></div>
-        <div class="row"><label>Threshold <span id="thrVal">0.00</span></label><input type="range" id="thr" min="0" max="100" value="0"></div>
-        <div class="row"><label>Sensitivity <span id="sensVal">1.00</span></label><input type="range" id="sens" min="0" max="100" value="100"></div>
-        <div class="row"><label>Stability <span id="stabVal">1</span></label><input type="range" id="stability" min="1" max="6" value="1"></div>
-        <div class="row"><label>Profile</label>
+        <div class="row">
+          <label>Opacity <span id="opVal">0.87</span></label>
+          <input type="range" id="opacity" min="20" max="100" value="87">
+        </div>
+        <div class="row">
+          <label>Threshold <span id="thrVal">0.00</span></label>
+          <input type="range" id="thr" min="0" max="100" value="0">
+        </div>
+        <div class="row">
+          <label>Sensitivity <span id="sensVal">1.00</span></label>
+          <input type="range" id="sens" min="0" max="100" value="100">
+        </div>
+        <div class="row">
+          <label>Stability <span id="stabVal">1</span></label>
+          <input type="range" id="stability" min="1" max="6" value="1">
+        </div>
+        <div class="row">
+          <label>Profile</label>
           <select id="profile">
             <option value="aggressive" selected>Aggressive</option>
             <option value="balanced">Balanced</option>
             <option value="safety">Safety</option>
           </select>
         </div>
-        <div class="row"><label>Fast mode</label><input type="checkbox" id="fastMode" checked></div>
-        <div class="grid2">
-          <button id="startBtn">Start</button>
-          <button id="stopBtn" disabled>Stop</button>
-          <button id="snapBtn" disabled>Snapshot</button>
-          <button id="clearLocal" class="ghost">Clear Local</button>
+        <div class="row">
+          <label>Fast mode</label>
+          <input type="checkbox" id="fastMode" checked>
         </div>
-        <p class="hint" id="msg">v6 — No service worker. If camera won’t start, see debug below.</p>
-      </div>
-      <div class="card small">
-        <div class="row"><label>Devices</label><div id="devInfo">—</div></div>
-        <div class="row"><label>Last error</label><div id="lastErr">—</div></div>
-        <div class="row"><label>Hints</label><div>
-          Safari ➜ Settings ▸ Privacy & Security ▸ Camera ▸ allow for this site. Close other tabs using camera.
-        </div></div>
+        <div class="row">
+          <button class="tool ghost" id="openSettings">Open drawer</button>
+        </div>
+        <p class="hint">Aggressive · Threshold 0.00 · Sensitivity 1.00 · Stability 1 · Fast ON</p>
       </div>
     </section>
   </main>
 
-  <footer class="foot"><small>Prototype — verify visually. Works offline once loaded.</small></footer>
-
-  <script src="./app.js?v=6"></script>
+  <script src="./app.js?v=7"></script>
 </body>
 </html>
