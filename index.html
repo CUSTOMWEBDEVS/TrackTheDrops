@@ -4,17 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0b0e13">
-  <title>TrackTheDrop — Field</title>
-  <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./style.css">
+  <title>TrackTheDrop — Field (v6)</title>
+  <link rel="stylesheet" href="./style.css?v=6">
 </head>
 <body>
   <header class="topbar">
     <div class="brand"><span class="dot"></span><span>TrackTheDrop</span></div>
     <div class="actions">
       <button id="fsBtn" class="ghost">Fullscreen</button>
+      <button id="torchBtn" class="ghost">Flashlight</button>
       <label class="toggle"><input type="checkbox" id="alertToggle" checked><span>Alert on hit</span></label>
-      <button id="installBtn" class="ghost">Install</button>
     </div>
   </header>
 
@@ -53,15 +52,22 @@
           <button id="startBtn">Start</button>
           <button id="stopBtn" disabled>Stop</button>
           <button id="snapBtn" disabled>Snapshot</button>
-          <button id="clearSW" class="ghost">Reset Cache</button>
+          <button id="clearLocal" class="ghost">Clear Local</button>
         </div>
-        <p class="hint" id="msg">Defaults locked to your screenshot: Aggressive, Threshold 0.00, Sensitivity 1.00, Stability 1, Fast mode ON.</p>
+        <p class="hint" id="msg">v6 — No service worker. If camera won’t start, see debug below.</p>
+      </div>
+      <div class="card small">
+        <div class="row"><label>Devices</label><div id="devInfo">—</div></div>
+        <div class="row"><label>Last error</label><div id="lastErr">—</div></div>
+        <div class="row"><label>Hints</label><div>
+          Safari ➜ Settings ▸ Privacy & Security ▸ Camera ▸ allow for this site. Close other tabs using camera.
+        </div></div>
       </div>
     </section>
   </main>
 
-  <footer class="foot"><small>Prototype — verify visually. Works offline after first load.</small></footer>
+  <footer class="foot"><small>Prototype — verify visually. Works offline once loaded.</small></footer>
 
-  <script src="./app.js"></script>
+  <script src="./app.js?v=6"></script>
 </body>
 </html>
