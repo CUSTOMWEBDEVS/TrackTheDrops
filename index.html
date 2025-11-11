@@ -5,15 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0b0e13">
   <title>TrackTheDrop — Field</title>
-  <link rel="manifest" href="./manifest.webmanifest?v=5">
-  <link rel="stylesheet" href="./style.css?v=5">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./style.css">
 </head>
 <body>
   <header class="topbar">
     <div class="brand"><span class="dot"></span><span>TrackTheDrop</span></div>
     <div class="actions">
       <button id="fsBtn" class="ghost">Fullscreen</button>
-      <button id="torchBtn" class="ghost">Flashlight</button>
       <label class="toggle"><input type="checkbox" id="alertToggle" checked><span>Alert on hit</span></label>
       <button id="installBtn" class="ghost">Install</button>
     </div>
@@ -56,13 +55,13 @@
           <button id="snapBtn" disabled>Snapshot</button>
           <button id="clearSW" class="ghost">Reset Cache</button>
         </div>
-        <p class="hint" id="msg">v5 — If it won’t start, hit “Reset Cache”.</p>
+        <p class="hint" id="msg">Defaults locked to your screenshot: Aggressive, Threshold 0.00, Sensitivity 1.00, Stability 1, Fast mode ON.</p>
       </div>
     </section>
   </main>
 
   <footer class="foot"><small>Prototype — verify visually. Works offline after first load.</small></footer>
 
-  <script src="./app.js?v=5"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
