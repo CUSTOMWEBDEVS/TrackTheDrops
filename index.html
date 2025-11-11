@@ -1,1 +1,35 @@
-// placeholder for index.html v7.5
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0b0e13">
+  <title>TrackTheDrop — Mobile</title>
+  <link rel="stylesheet" href="./style.css?v=7.6">
+</head>
+<body>
+  <main class="app" id="app">
+    <section class="viewport fs" id="viewport">
+      <video id="video" playsinline muted class="gray"></video>
+      <canvas id="overlay" class="overlay"></canvas>
+      <div class="flash" id="flash"></div>
+
+      <div class="hud" id="hud">
+        <span id="status">Ready</span>
+        <span id="fps">— fps</span>
+        <button class="icon small" id="installBtn" aria-label="Install app" style="display:none">⬇</button>
+      </div>
+
+      <nav class="toolbar" id="toolbar">
+        <button class="tool" id="startBtn">Start</button>
+        <button class="tool" id="torchBtn">Flashlight</button>
+        <button class="tool alert" id="alertBtn" aria-pressed="true">Alert: On</button>
+      </nav>
+
+      <div class="tap-hint" id="tapHint">Tap to Start</div>
+    </section>
+  </main>
+
+  <script src="./app.js?v=7.6"></script>
+</body>
+</html>
