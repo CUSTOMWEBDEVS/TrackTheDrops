@@ -1,0 +1,3 @@
+self.addEventListener('install', e=>{e.waitUntil((async()=>{const c=await caches.open('ttd-v1');await c.addAll(['./','./index.html','./style.css','./app.js','./manifest.webmanifest']);self.skipWaiting();})());});
+self.addEventListener('activate', e=>e.waitUntil(self.clients.claim()));
+self.addEventListener('fetch', e=>{e.respondWith((async()=>{const r=await caches.match(e.request);if(r) return r; try { return await fetch(e.request); } catch { return r||Response.error(); }})());});

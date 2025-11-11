@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0f14">
+  <title>TrackTheDrop</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header>
+    <h1>TrackTheDrop</h1>
+    <div class="controls">
+      <button id="startBtn">Start</button>
+      <button id="stopBtn" disabled>Stop</button>
+      <button id="snapBtn" disabled>Snapshot</button>
+    </div>
+    <div class="toggles">
+      <label><input type="checkbox" id="showMask" checked> Show overlay</label>
+      <label><input type="checkbox" id="debugHeat"> Debug heat</label>
+    </div>
+    <div class="sliders">
+      <label>Threshold
+        <input type="range" id="thr" min="0" max="100" value="50">
+        <span id="thrVal">50</span>
+      </label>
+      <label>Sensitivity
+        <input type="range" id="sens" min="0" max="100" value="70">
+        <span id="sensVal">70</span>
+      </label>
+    </div>
+    <div id="msg" class="msg">JS loaded. Tap Start.</div>
+  </header>
+
+  <main>
+    <video id="video" playsinline muted></video>
+    <canvas id="view"></canvas>
+  </main>
+
+  <footer><small>Prototype only. Verify visually.</small></footer>
+
+  <script src="./app.js"></script>
+</body>
+</html>
