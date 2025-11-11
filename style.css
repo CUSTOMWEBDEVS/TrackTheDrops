@@ -8,7 +8,6 @@
 .layout{display:grid;grid-template-columns:1fr 320px;gap:12px;max-width:1200px;margin:10px auto;padding:0 10px}
 .onlyViewport{grid-template-columns:1fr 320px}
 .viewport{position:relative;background:#000;border:1px solid var(--line);border-radius:14px;overflow:hidden;min-height:340px}
-/* Pseudo fullscreen keeps overlay */
 .viewport.fs{position:fixed;inset:0;border-radius:0;border:none;z-index:9990}
 body.fs-lock{overflow:hidden}
 video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
@@ -26,7 +25,4 @@ button,select,input[type=range]{background:#0e1522;color:var(--ink);border:1px s
 button:disabled{opacity:.55;cursor:not-allowed}
 .hint{color:#ffd166;margin-top:6px;font-size:12px;white-space:pre-wrap}
 .foot{text-align:center;color:var(--muted);padding:10px 0 20px}
-@media (max-width: 900px){
-  .layout{grid-template-columns:1fr}
-  .panel{order:3}
-}
+@media (max-width: 900px){.layout{grid-template-columns:1fr}.panel{order:3}}

@@ -1,4 +1,7 @@
 (function(){
+  const log=(...a)=>{try{console.log('[TTD]',...a)}catch{}}
+  window.addEventListener('error', e=>{const m=document.getElementById('msg'); if(m) m.textContent='JS error: '+(e?.message||e)});
+
   const $=id=>document.getElementById(id);
   const el={video:$('video'),overlay:$('overlay'),tapHint:$('tapHint'),status:$('status'),fps:$('fps'),
     startBtn:$('startBtn'),stopBtn:$('stopBtn'),snapBtn:$('snapBtn'),clearSW:$('clearSW'),
@@ -16,9 +19,9 @@
 
   // Audio click for alert; vibrate on Android only
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  const ctx=new (window.AudioContext||window.webkitAudioContext)();
+  let ctx; try{ ctx=new (window.AudioContext||window.webkitAudioContext)() }catch{}
   function clickSound(){ try{
-    if(!el.alertToggle.checked) return;
+    if(!el.alertToggle.checked || !ctx) return;
     const o=ctx.createOscillator(), g=ctx.createGain(); o.type='square'; o.frequency.value=1100; g.gain.value=0.06;
     o.connect(g); g.connect(ctx.destination); o.start(); setTimeout(()=>o.stop(),65);
   }catch{}}
@@ -27,7 +30,6 @@
   function alertHit(){ clickSound(); flashScreen(); haptic(); }
 
   function setViewportSize(){
-    // match overlay to video frame size
     dispW=el.video.videoWidth||el.viewport.clientWidth; dispH=el.video.videoHeight||el.viewport.clientHeight;
     el.overlay.width=dispW; el.overlay.height=dispH;
   }
@@ -71,7 +73,7 @@
   }
 
   function filterBlobs(binary,w,h,img,tune,edges){
-    const visited=new Uint8Array(w*h),keep=new Uint8Array(w*h),px=img.data,mag=edges.mag,ori=edges.ori;
+    const visited=new Uint8Array(w*h),keep=new Uint8Array(w*h),mag=edges.mag,ori=edges.ori;
     const minArea=Math.max(6,Math.floor(w*h*getTune().minAreaFrac)),maxArea=Math.floor(w*h*tune.maxFrac);
     function flood(start){
       const q=[start];visited[start]=1;const coords=[];let area=0;const oriBins=new Float32Array(12);
@@ -93,36 +95,36 @@
     return {keep,blobs}
   }
 
+  const proc=document.createElement('canvas'), procCtx=proc.getContext('2d',{willReadFrequently:true});
+
   function sizeProcessingCanvas(){
-    // base the processing resolution on display width
-    dispW=el.video.videoWidth||640; dispH=el.video.videoHeight||480;
+    dispW=el.video.videoWidth||el.viewport.clientWidth; dispH=el.video.videoHeight||el.viewport.clientHeight;
     el.overlay.width=dispW; el.overlay.height=dispH;
-    const scale=320/dispW; const w=Math.max(160,Math.round(dispW*scale)); const h=Math.max(120,Math.round(dispH*scale));
-    return {w,h}
+    const scale=320/Math.max(1,dispW); const w=Math.max(160,Math.round(dispW*scale)); const h=Math.max(120,Math.round(dispH*scale));
+    proc.width=w; proc.height=h; procW=w; procH=h;
   }
 
-  const proc=document.createElement('canvas'), pctx=proc.getContext('2d',{willReadFrequently:true});
-
+  let starting=false;
   async function start(){
-    if(stream) return;
+    if(stream || starting) return; starting=true;
     try{
       el.status.textContent='Requesting camera…';
       stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30}},audio:false});
-    }catch(e){el.msg.textContent='Camera error: '+e.message;return}
-    el.video.srcObject=stream; try{await el.video.play()}catch{}
-    setViewportSize();
-    const sz=sizeProcessingCanvas(); procW=sz.w; procH=sz.h; proc.width=procW; proc.height=procH;
-    el.startBtn.disabled=true; el.stopBtn.disabled=false; el.snapBtn.disabled=false; el.tapHint.style.display='none'; el.status.textContent='Streaming…';
-    frames=0; lastTS=performance.now();
+      el.video.srcObject=stream; await el.video.play().catch(()=>{});
+      sizeProcessingCanvas();
+      el.startBtn.disabled=true; el.stopBtn.disabled=false; el.snapBtn.disabled=false; el.tapHint.style.display='none'; el.status.textContent='Streaming…';
+      frames=0; lastTS=performance.now(); frameCount=0; persist=null; stableMask=null; edgesCache=null;
+    }catch(e){el.msg.textContent='Camera error: '+e.message; starting=false; return}
+    starting=false;
 
     function frame(ts){
-      if(!stream){cancelAnimationFrame(anim);return}
+      if(!stream){cancelAnimationFrame(anim); return}
       frames++; if(ts-lastTS>1000){el.fps.textContent=frames+' fps'; frames=0; lastTS=ts}
       frameCount++;
 
-      const pctx=proc.getContext('2d'); const octx=el.overlay.getContext('2d');
-      pctx.drawImage(el.video,0,0,procW,procH);
-      const color=pctx.getImageData(0,0,procW,procH);
+      // draw downscaled frame
+      procCtx.drawImage(el.video,0,0,procW,procH);
+      const color=procCtx.getImageData(0,0,procW,procH);
       const d=color.data, sens=Number(el.sens.value)/100, thr=Number(el.thr.value)/100, tune=(PROFILES[el.profile.value]||PROFILES.aggressive);
       const doLab = (!el.fastMode.checked) || (frameCount%2===0);
 
@@ -142,17 +144,18 @@
       const {keep,blobs}=filterBlobs(bin,procW,procH,color,tune,edgesCache);
       for(let i=0;i<keep.length;i++){ if(keep[i]) persist[i]=Math.min(255,persist[i]+1); else persist[i]=Math.max(0,persist[i]-1); stableMask[i]=(persist[i]>=need)?1:0; }
 
+      const octx=el.overlay.getContext('2d');
       octx.clearRect(0,0,el.overlay.width,el.overlay.height);
       const mode=el.overlayMode.value, alpha=Number(el.opacity.value)/100;
 
       if(mode==='debug'){
-        const heat=pctx.createImageData(procW,procH), dd=heat.data;
+        const heat=procCtx.createImageData(procW,procH), dd=heat.data;
         for(let i=0,p=0;i<score.length;i++,p+=4){const n=(score[i]-min)/rng; dd[p]=Math.min(255,n*255); dd[p+1]=0; dd[p+2]=Math.min(255,(1-n)*255); dd[p+3]=255}
-        pctx.putImageData(heat,0,0); octx.drawImage(proc,0,0,el.overlay.width,el.overlay.height);
+        procCtx.putImageData(heat,0,0); octx.drawImage(proc,0,0,el.overlay.width,el.overlay.height);
       }else{
-        const out=pctx.createImageData(procW,procH), od=out.data;
+        const out=procCtx.createImageData(procW,procH), od=out.data;
         for(let i=0,p=0;i<stableMask.length;i++,p+=4){ if(stableMask[i]){ od[p]=235;od[p+1]=20;od[p+2]=20;od[p+3]=Math.floor(alpha*255);} }
-        pctx.putImageData(out,0,0); octx.drawImage(proc,0,0,el.overlay.width,el.overlay.height);
+        procCtx.putImageData(out,0,0); octx.drawImage(proc,0,0,el.overlay.width,el.overlay.height);
       }
 
       let anyHit=false;
@@ -174,13 +177,11 @@
 
   function snapshot(){ const a=document.createElement('a'); a.download=`ttd_${Date.now()}.png`; a.href=el.overlay.toDataURL('image/png'); a.click(); }
 
-  // Pseudo fullscreen keeps canvas overlay
   function toggleFullscreen(){
     const on = !el.viewport.classList.contains('fs');
     if(on){ el.viewport.classList.add('fs'); document.body.classList.add('fs-lock'); }
     else   { el.viewport.classList.remove('fs'); document.body.classList.remove('fs-lock'); }
-    // ensure overlay resizes
-    setTimeout(setViewportSize, 50);
+    setTimeout(()=>{ if(stream) { sizeProcessingCanvas() } }, 50);
   }
 
   async function toggleTorch(){
@@ -189,18 +190,17 @@
         const track = stream.getVideoTracks()[0];
         const caps = track.getCapabilities?.();
         if(caps && 'torch' in caps){
-          torchOn=!torchOn;
-          await track.applyConstraints({ advanced: [{ torch: torchOn }] });
-          el.torchBtn.textContent = torchOn ? 'Flashlight (on)' : 'Flashlight';
+          const cur = (track.getConstraints()?.advanced||[]).find(o=>o.torch===true);
+          const next = !cur; await track.applyConstraints({ advanced: [{ torch: next }] });
+          el.torchBtn.textContent = next ? 'Flashlight (on)' : 'Flashlight';
           return;
         }
       }
-    }catch(e){ /* ignore */ }
-    // fallback: white overlay pulse for 10s
-    el.flash.style.opacity='1'; setTimeout(()=>{el.flash.style.opacity='0'}, 10000);
+    }catch(e){ el.msg.textContent='Torch not available: '+e.message }
+    el.flash.style.opacity = (el.flash.style.opacity==='1' ? '0' : '1'); // fallback toggle
   }
 
-  if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{})}
+  if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js?v=5').catch(()=>{})}
   let deferredPrompt=null; window.addEventListener('beforeinstallprompt',e=>{e.preventDefault(); deferredPrompt=e; el.installBtn.style.display='inline-flex'});
   el.installBtn.onclick=()=>{ if(deferredPrompt){deferredPrompt.prompt(); deferredPrompt=null} }
   el.clearSW.onclick=async()=>{ if('caches' in window){ const keys=await caches.keys(); await Promise.all(keys.map(k=>caches.delete(k))); location.reload(); } }
@@ -210,7 +210,5 @@
   el.fsBtn.addEventListener('click',toggleFullscreen);
   el.torchBtn.addEventListener('click',toggleTorch);
 
-  window.addEventListener('error', e=>{const m=$('msg'); if(m) m.textContent='JS error: '+(e?.message||e)});
-
-  $('msg').textContent='JS loaded. Ready.';
+  el.msg.textContent='JS loaded. Ready.';
 })();
