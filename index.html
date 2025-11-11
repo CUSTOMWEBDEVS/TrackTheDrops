@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#0b0e13">
   <title>TrackTheDrop — Mobile</title>
-  <link rel="stylesheet" href="./style.css?v=7.1">
+  <link rel="stylesheet" href="./style.css?v=7.2">
 </head>
 <body>
   <main class="app" id="app">
@@ -14,15 +14,13 @@
       <canvas id="overlay" class="overlay"></canvas>
       <div class="flash" id="flash"></div>
 
-      <!-- HUD -->
       <div class="hud" id="hud">
         <button class="icon small" id="exitFS" aria-label="Exit fullscreen">✕</button>
         <span id="status">Ready</span>
         <span id="fps">— fps</span>
-        <button class="icon small" id="installBtn" aria-label="Install app">⬇</button>
+        <button class="icon small" id="installBtn" aria-label="Install app" style="display:none">⬇</button>
       </div>
 
-      <!-- Bottom toolbar -->
       <nav class="toolbar" id="toolbar">
         <button class="tool" id="startBtn">Start</button>
         <button class="tool" id="torchBtn">Flashlight</button>
@@ -30,59 +28,10 @@
         <button class="tool" id="fsBtn">Fullscreen</button>
       </nav>
 
-      <!-- Tap hint when stopped -->
       <div class="tap-hint" id="tapHint">Tap to Start</div>
-    </section>
-
-    <!-- Compact settings drawer -->
-    <section class="drawer" id="drawer" aria-hidden="true">
-      <header class="drawer-head">
-        <strong>Tracking</strong>
-        <button class="icon" id="closeDrawer">✕</button>
-      </header>
-      <div class="drawer-body">
-        <div class="row">
-          <label>Overlay</label>
-          <select id="overlayMode">
-            <option value="debug">Debug score</option>
-            <option value="blend">Blend</option>
-            <option value="contour">Contour</option>
-            <option value="mask" selected>Mask</option>
-          </select>
-        </div>
-        <div class="row">
-          <label>Opacity <span id="opVal">0.87</span></label>
-          <input type="range" id="opacity" min="20" max="100" value="87">
-        </div>
-        <div class="row">
-          <label>Threshold <span id="thrVal">0.00</span></label>
-          <input type="range" id="thr" min="0" max="100" value="0">
-        </div>
-        <div class="row">
-          <label>Sensitivity <span id="sensVal">1.00</span></label>
-          <input type="range" id="sens" min="0" max="100" value="100">
-        </div>
-        <div class="row">
-          <label>Stability <span id="stabVal">1</span></label>
-          <input type="range" id="stability" min="1" max="6" value="1">
-        </div>
-        <div class="row">
-          <label>Profile</label>
-          <select id="profile">
-            <option value="aggressive" selected>Aggressive</option>
-            <option value="balanced">Balanced</option>
-            <option value="safety">Safety</option>
-          </select>
-        </div>
-        <div class="row">
-          <label>Fast mode</label>
-          <input type="checkbox" id="fastMode" checked>
-        </div>
-        <p class="hint">Aggressive · Threshold 0.00 · Sensitivity 1.00 · Stability 1 · Fast ON</p>
-      </div>
     </section>
   </main>
 
-  <script src="./app.js?v=7.1"></script>
+  <script src="./app.js?v=7.2"></script>
 </body>
 </html>
