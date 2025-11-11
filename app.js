@@ -1,18 +1,19 @@
-// v7.7 hardened
+// TrackTheDrop v7.9 — three-file build, robust init
 (function(){
   const $=id=>document.getElementById(id);
   const el={video:$('video'),overlay:$('overlay'),tapHint:$('tapHint'),status:$('status'),fps:$('fps'),
     startBtn:$('startBtn'),torchBtn:$('torchBtn'),alertBtn:$('alertBtn'),
-    flash:$('flash'),installBtn:$('installBtn'),
-    viewport:$('viewport'), app:$('app') };
-  const octx = $('overlay').getContext('2d');
+    flash:$('flash'),viewport:$('viewport'), app:$('app') };
+  const octx = el.overlay.getContext('2d');
 
+  // Show errors on screen for field debugging
   window.onerror = (msg, src, line, col, err)=>{ el.status.textContent = 'ERR: '+(err && err.message ? err.message : msg); };
   window.onunhandledrejection = (e)=>{ el.status.textContent = 'PromiseERR: '+ (e.reason && e.reason.message ? e.reason : 'rejection'); };
 
+  // ===== UI =====
   let uiTimer=null;
   function showUI(){ el.app.classList.remove('hiddenUI'); if(uiTimer) clearTimeout(uiTimer); uiTimer=setTimeout(()=>el.app.classList.add('hiddenUI'),2200) }
-  ;['startBtn','torchBtn','alertBtn','installBtn'].forEach(id=>{
+  ;['startBtn','torchBtn','alertBtn'].forEach(id=>{
     const b=el[id]; if(!b) return;
     b.addEventListener('click', (e)=>{ e.stopPropagation(); showUI(); }, true);
   });
@@ -22,18 +23,17 @@
     showUI();
   });
 
+  // ===== Haptics =====
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  const hasCap = (typeof window!=='undefined' && window.Capacitor && window.Capacitor.Haptics);
   let aCtx; try{ aCtx=new (window.AudioContext||window.webkitAudioContext)() }catch{}
   async function hapticPulse(){
     if(el.alertBtn.getAttribute('aria-pressed')!=='true') return;
-    if(hasCap){ try{ await window.Capacitor.Haptics.impact({ style:'medium' }); return; }catch{} }
     if('vibrate' in navigator && !isIOS){ navigator.vibrate(40); return; }
     try{ if(aCtx && aCtx.state==='suspended') await aCtx.resume(); if(aCtx){ const o=aCtx.createOscillator(), g=aCtx.createGain(); o.type='square'; o.frequency.value=1100; g.gain.value=0.05; o.connect(g); g.connect(aCtx.destination); o.start(); setTimeout(()=>o.stop(),60);} }catch{}
-    flashOnce();
+    el.flash.style.opacity='0.45'; setTimeout(()=>el.flash.style.opacity='0',120);
   }
-  function flashOnce(){ el.flash.style.opacity='0.45'; setTimeout(()=>el.flash.style.opacity='0',120) }
 
+  // ===== Camera & processing =====
   let stream=null, anim=null, lastTS=0, frames=0;
   let dispW=640, dispH=480, procW=320, procH=240, frameCount=0;
   let persist=null, stableMask=null, edgesCache=null;
@@ -107,6 +107,7 @@
     proc.width=w; proc.height=h; procW=w; procH=h;
   }
 
+  // Start/Stop
   let starting=false;
   async function start(){
     if(stream||starting) return; starting=true;
@@ -183,6 +184,9 @@
       if(!proc.width||!proc.height) sizeProcessingCanvas();
       frames++; if(ts-lastTS>1000){ el.fps.textContent=frames+' fps'; frames=0; lastTS=ts }
       frameCount++;
+
+      const vw=el.video.videoWidth|0, vh=el.video.videoHeight|0;
+      if(vw && vh){ setViewportSize(); }
 
       procCtx.drawImage(el.video,0,0,procW,procH);
       const img=procCtx.getImageData(0,0,procW,procH);
