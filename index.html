@@ -1,45 +1,38 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b0f14">
-  <title>TrackTheDrop</title>
+  <meta name="theme-color" content="#0b0e13">
+  <title>TrackTheDrop — Field Viewer</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <header>
-    <h1>TrackTheDrop</h1>
-    <div class="controls">
-      <button id="startBtn">Start</button>
-      <button id="stopBtn" disabled>Stop</button>
-      <button id="snapBtn" disabled>Snapshot</button>
-    </div>
-    <div class="toggles">
-      <label><input type="checkbox" id="showMask" checked> Show overlay</label>
-      <label><input type="checkbox" id="debugHeat"> Debug heat</label>
-    </div>
-    <div class="sliders">
-      <label>Threshold
-        <input type="range" id="thr" min="0" max="100" value="50">
-        <span id="thrVal">50</span>
-      </label>
-      <label>Sensitivity
-        <input type="range" id="sens" min="0" max="100" value="70">
-        <span id="sensVal">70</span>
-      </label>
-    </div>
-    <div id="msg" class="msg">JS loaded. Tap Start.</div>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span><span>TrackTheDrop</span></div>
+    <div class="actions"><button id="installBtn" class="ghost">Install</button><button id="helpBtn" class="ghost">Help</button></div>
   </header>
-
-  <main>
-    <video id="video" playsinline muted></video>
-    <canvas id="view"></canvas>
+  <main class="layout">
+    <section class="viewport">
+      <div class="hud"><span id="status">Ready</span><span id="fps">— fps</span></div>
+      <video id="video" playsinline muted></video>
+      <canvas id="view"></canvas>
+      <canvas id="overlay" class="overlay"></canvas>
+    </section>
+    <section class="panel">
+      <div class="card">
+        <div class="row"><label>Profile</label><select id="profile"><option value="safety" selected>Safety (strict)</option><option value="balanced">Balanced</option><option value="aggressive">Aggressive</option></select></div>
+        <div class="row"><label>Overlay</label><select id="overlayMode"><option value="blend" selected>Blend</option><option value="contour">Contour</option><option value="mask">Mask</option><option value="debug">Debug score</option></select></div>
+        <div class="row"><label>Threshold <span id="thrVal">0.65</span></label><input type="range" id="thr" min="0" max="100" value="65"></div>
+        <div class="row"><label>Sensitivity <span id="sensVal">0.70</span></label><input type="range" id="sens" min="0" max="100" value="70"></div>
+        <div class="row"><label>Stability (frames) <span id="stabVal">3</span></label><input type="range" id="stability" min="1" max="6" value="3"></div>
+        <div class="grid2"><button id="startBtn">Start</button><button id="stopBtn" disabled>Stop</button><button id="snapBtn" disabled>Snapshot</button><button id="clearSW" class="ghost">Reset Cache</button></div>
+        <p class="hint" id="msg">JS loaded. Use Safari/Chrome over HTTPS and allow camera.</p>
+      </div>
+      <div class="card small"><details><summary>Notes</summary><ul><li>This is NOT thermal. “Debug score” shows how blood‑like a pixel’s color is.</li><li>Safety profile reduces false positives from leaves, wood, and red plastics.</li><li>Use higher Threshold and Stability in bright scenes.</li></ul></details></div>
+    </section>
   </main>
-
-  <footer><small>Prototype only. Verify visually.</small></footer>
-
+  <footer class="foot"><small>Prototype — verify visually. Works offline after first load.</small></footer>
   <script src="./app.js"></script>
-</body>
-</html>
+</body></html>
