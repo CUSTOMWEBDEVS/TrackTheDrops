@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#0b0e13">
   <title>TrackTheDrop — Mobile</title>
-  <link rel="stylesheet" href="./style.css?v=7">
+  <link rel="stylesheet" href="./style.css?v=7.1">
 </head>
 <body>
   <main class="app" id="app">
@@ -14,20 +14,15 @@
       <canvas id="overlay" class="overlay"></canvas>
       <div class="flash" id="flash"></div>
 
-      <!-- Minimal HUD -->
+      <!-- HUD -->
       <div class="hud" id="hud">
+        <button class="icon small" id="exitFS" aria-label="Exit fullscreen">✕</button>
         <span id="status">Ready</span>
         <span id="fps">— fps</span>
+        <button class="icon small" id="installBtn" aria-label="Install app">⬇</button>
       </div>
 
-      <!-- Floating top controls -->
-      <div class="topbar" id="topbar">
-        <button class="icon" id="exitFS" aria-label="Exit fullscreen">✕</button>
-        <div class="spacer"></div>
-        <button class="icon" id="installBtn" aria-label="Install app">⬇</button>
-      </div>
-
-      <!-- Bottom toolbar (large, thumb-friendly) -->
+      <!-- Bottom toolbar -->
       <nav class="toolbar" id="toolbar">
         <button class="tool" id="startBtn">Start</button>
         <button class="tool" id="torchBtn">Flashlight</button>
@@ -40,7 +35,7 @@
     </section>
 
     <!-- Compact settings drawer -->
-    <section class="drawer" id="drawer">
+    <section class="drawer" id="drawer" aria-hidden="true">
       <header class="drawer-head">
         <strong>Tracking</strong>
         <button class="icon" id="closeDrawer">✕</button>
@@ -83,14 +78,11 @@
           <label>Fast mode</label>
           <input type="checkbox" id="fastMode" checked>
         </div>
-        <div class="row">
-          <button class="tool ghost" id="openSettings">Open drawer</button>
-        </div>
         <p class="hint">Aggressive · Threshold 0.00 · Sensitivity 1.00 · Stability 1 · Fast ON</p>
       </div>
     </section>
   </main>
 
-  <script src="./app.js?v=7"></script>
+  <script src="./app.js?v=7.1"></script>
 </body>
 </html>
