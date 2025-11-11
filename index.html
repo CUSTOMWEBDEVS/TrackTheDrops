@@ -18,22 +18,69 @@
     <section class="viewport" id="tapStart">
       <div class="tap-hint" id="tapHint">Tap to Start</div>
       <div class="hud"><span id="status">Ready</span><span id="fps">— fps</span></div>
-      <video id="video" playsinline muted></video>
-      <canvas id="view"></canvas>
+      <video id="video" playsinline muted class="gray"></video>
       <canvas id="overlay" class="overlay"></canvas>
     </section>
 
     <section class="panel">
       <div class="card">
-        <div class="row"><label>Profile</label><select id="profile"><option value="safety">Safety (strict)</option><option value="balanced" selected>Balanced</option><option value="aggressive">Aggressive</option></select></div>
-        <div class="row"><label>Overlay</label><select id="overlayMode"><option value="blend" selected>Blend</option><option value="contour">Contour</option><option value="mask">Mask</option><option value="debug">Debug score</option></select></div>
-        <div class="row"><label>Threshold <span id="thrVal">0.55</span></label><input type="range" id="thr" min="0" max="100" value="55"></div>
-        <div class="row"><label>Sensitivity <span id="sensVal">0.85</span></label><input type="range" id="sens" min="0" max="100" value="85"></div>
-        <div class="row"><label>Stability (frames) <span id="stabVal">2</span></label><input type="range" id="stability" min="1" max="6" value="2"></div>
-        <div class="grid2"><button id="startBtn">Start</button><button id="stopBtn" disabled>Stop</button><button id="snapBtn" disabled>Snapshot</button><button id="clearSW" class="ghost">Reset Cache</button></div>
-        <p class="hint" id="msg">Tip: On iPhone, use Safari and ensure the site is HTTPS. Allow camera when prompted.</p>
+        <div class="row"><label>Profile</label>
+          <select id="profile">
+            <option value="balanced" selected>Balanced</option>
+            <option value="safety">Safety (strict)</option>
+            <option value="aggressive">Aggressive</option>
+          </select>
+        </div>
+
+        <div class="row"><label>Overlay</label>
+          <select id="overlayMode">
+            <option value="blend" selected>Blend</option>
+            <option value="contour">Contour</option>
+            <option value="mask">Mask</option>
+            <option value="debug">Debug score</option>
+          </select>
+        </div>
+
+        <div class="row"><label>Opacity <span id="opVal">0.80</span></label>
+          <input type="range" id="opacity" min="20" max="100" value="80">
+        </div>
+
+        <div class="row"><label>Threshold <span id="thrVal">0.50</span></label>
+          <input type="range" id="thr" min="0" max="100" value="50">
+        </div>
+
+        <div class="row"><label>Sensitivity <span id="sensVal">0.85</span></label>
+          <input type="range" id="sens" min="0" max="100" value="85">
+        </div>
+
+        <div class="row"><label>Stability <span id="stabVal">2</span></label>
+          <input type="range" id="stability" min="1" max="6" value="2">
+        </div>
+
+        <div class="row"><label>Fast mode</label>
+          <input type="checkbox" id="fastMode" checked>
+        </div>
+
+        <div class="grid2">
+          <button id="startBtn">Start</button>
+          <button id="stopBtn" disabled>Stop</button>
+          <button id="snapBtn" disabled>Snapshot</button>
+          <button id="clearSW" class="ghost">Reset Cache</button>
+        </div>
+
+        <p class="hint" id="msg">Tip: Use Safari/Chrome over HTTPS and allow camera. Balanced + Threshold 0.45–0.55 is a good start.</p>
       </div>
-      <div class="card small"><details><summary>Notes</summary><ul><li>This is NOT thermal. “Debug score” shows how blood-like a pixel’s color is.</li><li>Balanced profile is a good mobile default. Use Safety to suppress leaves/wood. Use Aggressive for faint trails.</li><li>In bright scenes, raise Threshold or Stability.</li></ul></details></div>
+
+      <div class="card small">
+        <details>
+          <summary>Notes</summary>
+          <ul>
+            <li>Not thermal. Debug = blood-likeness score.</li>
+            <li>We process a downscaled frame for speed and upscale the mask.</li>
+            <li>Fast mode skips some Lab passes; disable for maximum accuracy.</li>
+          </ul>
+        </details>
+      </div>
     </section>
   </main>
 
