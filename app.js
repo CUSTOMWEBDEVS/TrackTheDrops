@@ -41,115 +41,160 @@
     const cr = 128 + 0.5*r - 0.418688*g - 0.081312*b;
     return {y,cb,cr};
   }
-
-  // Helper: circular hue distance in degrees
   function hueDistDeg(hDeg, refDeg){
     let d = Math.abs(hDeg - refDeg) % 360;
     if (d > 180) d = 360 - d;
     return d;
   }
 
-  // Ref “blood red” anchors (from your note)
-  const REF = {
-    rgb: {r:138,g:3,b:3},
-    hsv: {hDeg: 0, s: 0.98, v: 0.54},
-    ycbcr: {y:43, cr: 200, cb: 105} // computed with BT.601 from (138,3,3)
-  };
-
-  // Scoring function: 0..1
-  function bloodScore(r,g,b, sensGate){ // sensGate in [0..1]
-    // Fast structural reject
+  // Scoring function: 0..1 (HSV + ratios + YCbCr)
+  function bloodScore(r,g,b, sensGate){
     if (!(r > g && g >= b)) return 0;
 
-    // HSV gates: hue near 0°, S high, V not too bright
     const {h,s,v} = toHSV(r,g,b);
     const hDeg = h*360;
-    const hTol = 12 + 10*(1-sensGate);        // 12–22° tolerance
+    const hTol = 14 + 10*(1-sensGate);
     const hueOK = (hueDistDeg(hDeg, 0) <= hTol);
-    const sMin  = 0.6 - 0.25*(1-sensGate);    // >= 0.35..0.6
+    const sMin  = 0.55 - 0.25*(1-sensGate);
     const sOK = s >= sMin;
-    const vMax = 0.62 + 0.08*(1-sensGate);    // <= 0.62..0.70
-    const vMin = 0.12;                        // avoid near-black noise
+    const vMax = 0.62 + 0.10*(1-sensGate);
+    const vMin = 0.10;
     const vOK = v >= vMin && v <= vMax;
     if (!(hueOK && sOK && vOK)) return 0;
 
-    // RGB dominance/ratio gates (tuned)
     const r_g = r/Math.max(1,g);
     const r_b = r/Math.max(1,b);
     const gapRG = r-g, gapRB = r-b;
-    const ratioOK = (r_g >= 1.30 - 0.10*(sensGate)) && (r_b >= 2.00 - 0.30*(sensGate)) && (gapRG >= 14) && (gapRB >= 28);
+    const ratioOK = (r_g >= 1.3 - 0.1*sensGate) && (r_b >= 2.0 - 0.3*sensGate) && (gapRG >= 14) && (gapRB >= 28);
     if (!ratioOK) return 0;
 
-    // YCbCr gate: high Cr relative to Cb and not too bright Y
     const {y,cb,cr} = toYCbCr(r,g,b);
-    const yOK  = y <= 185 + 20*(1-sensGate);           // keep darker/mid luminance
+    const yOK  = y <= 185 + 25*(1-sensGate);
     const crOK = cr >= 160 - 20*(1-sensGate);
-    const crRel = (cr - 0.55*cb);                      // penalize pinks (high Cb)
+    const crRel = (cr - 0.55*cb);
     const crRelOK = crRel >= 90 - 20*(1-sensGate);
     if (!(yOK && crOK && crRelOK)) return 0;
 
-    // Distance to reference in hybrid space (HSV hue + ratios + YCbCr)
-    const hueScore = Math.max(0, 1 - hueDistDeg(hDeg, REF.hsv.hDeg) / (hTol+1));
+    // score
+    const hueScore = Math.max(0, 1 - hueDistDeg(hDeg, 0) / (hTol+1));
     const satScore = Math.min(1, (s - 0.35)/0.5);
-    const valScore = Math.min(1, (0.75 - v)/0.4);      // darker -> higher
+    const valScore = Math.min(1, (0.75 - v)/0.4);
     const crCbScore = Math.min(1, (crRel - 80)/80);
     const ratioScore = Math.min(1, ((r_b-1.6)/1.5 + (r_g-1.15)/0.7)/2);
 
-    // Weighted sum → tune weights to taste
     let score = 0;
     score += 0.30*hueScore;
     score += 0.18*satScore;
     score += 0.18*valScore;
     score += 0.22*crCbScore;
     score += 0.12*ratioScore;
-
-    // Clamp
     return Math.max(0, Math.min(1, score));
   }
 
-  // Simple blob filter to reject huge flats (doors) and tiny noise; also drop bright blobs
+  // ---- Image helpers ----
+  function sobelMagOri(gray, w, h){
+    const mag = new Float32Array(w*h);
+    const ori = new Float32Array(w*h);
+    const get=(x,y)=>gray[Math.max(0,Math.min(h-1,y))*w + Math.max(0,Math.min(w-1,x))];
+    for(let y=0;y<h;y++){
+      for(let x=0;x<w;x++){
+        const gx = -get(x-1,y-1)-2*get(x-1,y)+-get(x-1,y+1) + get(x+1,y-1)+2*get(x+1,y)+get(x+1,y+1);
+        const gy = -get(x-1,y-1)-2*get(x,y-1)-get(x+1,y-1) + get(x-1,y+1)+2*get(x,y+1)+get(x+1,y+1);
+        const m = Math.hypot(gx,gy);
+        mag[y*w+x]=m;
+        ori[y*w+x]=Math.atan2(gy,gx); // -pi..pi
+      }
+    }
+    return {mag, ori};
+  }
+
+  function computeGray(imgData){
+    const d=imgData.data, w=imgData.width, h=imgData.height;
+    const g=new Float32Array(w*h);
+    for(let p=0,i=0;p<d.length;p+=4,i++){
+      g[i]=0.299*d[p]+0.587*d[p+1]+0.114*d[p+2];
+    }
+    return g;
+  }
+
+  // Blob filter: rejects leaves/wood using geometry+texture cues
   function filterBlobs(binary, w, h, imgData){
     const visited = new Uint8Array(w*h);
     const keep = new Uint8Array(w*h);
     const px = imgData.data;
+
+    const gray = computeGray(imgData);
+    const {mag, ori} = sobelMagOri(gray, w, h);
+
     const minArea = 150;
     const maxFrac = 0.15; // 15% of frame
     const maxArea = Math.floor(w*h*maxFrac);
 
-    for (let y=0; y<h; y++){
-      for (let x=0; x<w; x++){
-        const idx = y*w + x;
-        if (visited[idx] || !binary[idx]) continue;
+    const isSpecular = (r,g,b)=>{
+      const {h,s,v}=toHSV(r,g,b);
+      return (v>0.85 && s<0.25);
+    };
 
-        // BFS
-        const q = [idx];
-        visited[idx]=1;
-        let area=0, sumV=0;
-        const coords = [];
+    function flood(start){
+      const q=[start]; visited[start]=1;
+      const coords=[]; let area=0, perim=0, sumV=0, edgeCount=0, specCount=0;
+      const oriBins=new Float32Array(18); // 10° bins
+      while(q.length){
+        const cur=q.pop(); coords.push(cur); area++;
+        const x=cur%w, y=(cur-x)/w;
+        const p=cur*4;
+        const r=px[p], g=px[p+1], b=px[p+2];
+        const v=Math.max(r,g,b)/255; sumV+=v;
+        if(isSpecular(r,g,b)) specCount++;
 
-        while (q.length){
-          const cur = q.pop();
-          coords.push(cur);
-          area++;
-          const p = cur*4;
-          const r=px[p], g=px[p+1], b=px[p+2];
-          const v = Math.max(r,g,b)/255;
-          sumV += v;
+        const m=mag[cur]; if(m>60) edgeCount++; // edge magnitude threshold
+        let ang=ori[cur]; if(ang<0) ang+=Math.PI*2;
+        const bin=Math.min(17, Math.floor(ang/(Math.PI*2)*18)); oriBins[bin]++;
 
-          const cx = cur % w, cy = (cur - cx)/w;
-          const nb = [cur-1, cur+1, cur-w, cur+w];
-          for (const n of nb){
-            if (n<0 || n>=w*h) continue;
-            const nx = n % w, ny = (n - nx)/w;
-            if (Math.abs(nx-cx)+Math.abs(ny-cy) !== 1) continue;
-            if (!visited[n] && binary[n]){ visited[n]=1; q.push(n); }
-          }
+        // boundary check for perimeter (4-neigh)
+        const neigh=[cur-1,cur+1,cur-w,cur+w];
+        let localBoundary=false;
+        for(const n of neigh){
+          if(n<0||n>=w*h){ localBoundary=true; continue; }
+          if(!binary[n]) localBoundary=true;
+          if(!visited[n] && binary[n]){ visited[n]=1; q.push(n); }
         }
-
-        const meanV = sumV / Math.max(1, area);
-        const ok = (area>=minArea) && (area<=maxArea) && (meanV <= 0.60);
-        if (ok) for (const id of coords) keep[id]=1;
+        if(localBoundary) perim++;
       }
+      // geometry
+      // approximate solidity using bounding box vs area (fast proxy)
+      let minx=w, maxx=0, miny=h, maxy=0;
+      for(const id of coords){ const x=id%w, y=(id-x)/w; if(x<minx)minx=x; if(x>maxx)maxx=x; if(y<miny)miny=y; if(y>maxy)maxy=y; }
+      const bboxArea=(maxx-minx+1)*(maxy-miny+1);
+      const solidity=area/Math.max(1,bboxArea);
+
+      const meanV=sumV/Math.max(1,area);
+      const edgeDensity=edgeCount/Math.max(1,area);
+      const specDensity=specCount/Math.max(1,area);
+
+      // wood grain: strong single orientation
+      let maxBin=0,sumBins=0;
+      for(let i=0;i<oriBins.length;i++){ if(oriBins[i]>maxBin)maxBin=oriBins[i]; sumBins+=oriBins[i]; }
+      const oriDominance = maxBin/Math.max(1,sumBins); // close to 1 => single direction
+
+      // Heuristics:
+      // - keep darker, fairly solid blobs
+      // - drop very bright mean (dew/candy), jagged (high edge density), or strong single orientation (wood)
+      const areaOK = (area>=minArea) && (area<=maxArea);
+      const brightnessOK = meanV <= 0.62;
+      const solidityOK = solidity >= 0.80;   // leaves with lobes tend to reduce this proxy
+      const jaggedOK   = edgeDensity <= 0.22; // leaves have vein edges -> higher
+      const dewOK      = specDensity <= 0.02; // many tiny highlights => dew on leaf
+      const woodOK     = oriDominance <= 0.52; // wood has pronounced grain orientation
+
+      const ok = areaOK && brightnessOK && solidityOK && jaggedOK && dewOK && woodOK;
+      return {ok, coords};
+    }
+
+    for(let i=0;i<w*h;i++){
+      if(visited[i] || !binary[i]) continue;
+      const {ok, coords} = flood(i);
+      if(ok){ for(const id of coords) keep[id]=1; }
     }
     return keep;
   }
