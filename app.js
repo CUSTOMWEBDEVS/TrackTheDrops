@@ -1,19 +1,32 @@
 (function(){
   window.addEventListener('error', e=>{const m=document.getElementById('msg');if(m)m.textContent='JS error: '+(e?.message||e)});
-  const qs=id=>document.getElementById(id);
-  const el={video:qs('video'),overlay:qs('overlay'),tapHint:qs('tapHint'),status:qs('status'),fps:qs('fps'),
-    startBtn:qs('startBtn'),stopBtn:qs('stopBtn'),snapBtn:qs('snapBtn'),clearSW:qs('clearSW'),
-    thr:qs('thr'),thrVal:qs('thrVal'),sens:qs('sens'),sensVal:qs('sensVal'),stability:qs('stability'),stabVal:qs('stabVal'),
-    overlayMode:qs('overlayMode'),profile:qs('profile'),opacity:qs('opacity'),opVal:qs('opVal'),msg:qs('msg'),
-    fsBtn:qs('fsBtn'),torchBtn:qs('torchBtn'),vibeToggle:qs('vibeToggle'),
-    dropPing:qs('dropPing'),clearPings:qs('clearPings'),trackWalk:qs('trackWalk')};
+  const $=id=>document.getElementById(id);
+  const el={video:$('video'),overlay:$('overlay'),tapHint:$('tapHint'),status:$('status'),fps:$('fps'),
+    startBtn:$('startBtn'),stopBtn:$('stopBtn'),snapBtn:$('snapBtn'),clearSW:$('clearSW'),
+    thr:$('thr'),thrVal:$('thrVal'),sens:$('sens'),sensVal:$('sensVal'),stability:$('stability'),stabVal:$('stabVal'),
+    overlayMode:$('overlayMode'),profile:$('profile'),opacity:$('opacity'),opVal:$('opVal'),msg:$('msg'),
+    fsBtn:$('fsBtn'),alertToggle:$('alertToggle'),flash:$('flash'),installBtn:$('installBtn'),fastMode:$('fastMode')};
   const bindRange=(r,lab,fmt=v=>Number(v/100).toFixed(2))=>{const f=()=>lab.textContent=fmt(r.value);r.addEventListener('input',f);f()}
-  bindRange(el.opacity,el.opVal);bindRange(el.thr,el.thrVal);bindRange(el.sens,el.sensVal);bindRange(el.stability,el.stabVal,v=>String(v));
+  bindRange(el.opacity,$('opVal'));bindRange(el.thr,$('thrVal'));bindRange(el.sens,$('sensVal'));bindRange(el.stability,$('stabVal'),v=>String(v));
 
   let stream=null, anim=null, lastTS=0, frames=0;
   let dispW=640, dispH=480, procW=320, procH=240, frameCount=0;
   let persist=null, stableMask=null, edgesCache=null;
-  let torchOn=false;
+
+  // Audio click used on iOS (no vibration support)
+  const ctx=new (window.AudioContext||window.webkitAudioContext)();
+  function clickSound(){
+    if(!el.alertToggle.checked) return;
+    try{
+      const o=ctx.createOscillator(), g=ctx.createGain(); o.type='square'; o.frequency.value=1100; g.gain.value=0.05;
+      o.connect(g); g.connect(ctx.destination); o.start(); setTimeout(()=>{o.stop()},65);
+    }catch{}
+  }
+  function flashScreen(){
+    if(!el.alertToggle.checked) return;
+    el.flash.style.opacity='0.4'; setTimeout(()=>{el.flash.style.opacity='0'},120);
+  }
+  function alertHit(){ clickSound(); flashScreen() }
 
   const BASE={vMaxBase:0.58,vMin:0.08,sMinBase:0.58,hTolBase:14,aMinBase:38,bMaxBase:20,aDivBRatio:2.0,crRelBase:95,yMaxBase:182,
     minAreaFrac:0.0007,maxFrac:0.14,edgeMagThresh:65,maxEdgeDensity:0.22,maxSpecDensity:0.02,minSolidity:0.80,maxOriDominance:0.50};
@@ -54,102 +67,58 @@
 
   function filterBlobs(binary,w,h,img,tune,edges){
     const visited=new Uint8Array(w*h),keep=new Uint8Array(w*h),px=img.data,mag=edges.mag,ori=edges.ori;
-    const minArea=Math.max(8,Math.floor(w*h*getTune().minAreaFrac)),maxArea=Math.floor(w*h*tune.maxFrac);
-    const isSpecular=(r,g,b)=>{const {h,s,v}=toHSV(r,g,b);return(v>0.85&&s<0.25)};
+    const minArea=Math.max(6,Math.floor(w*h*getTune().minAreaFrac)),maxArea=Math.floor(w*h*tune.maxFrac);
     function flood(start){
       const q=[start];visited[start]=1;const coords=[];let area=0;const oriBins=new Float32Array(12);
-      let minx=w,maxx=0,miny=h,maxy=0;
-      while(q.length){const cur=q.pop();coords.push(cur);const x=cur%w,y=(cur-x)/w;
+      let minx=w,maxx=0,miny=h,maxy=0,cx=0,cy=0;
+      while(q.length){const cur=q.pop();coords.push(cur);area++;const x=cur%w,y=(cur-x)/w;cx+=x;cy+=y;
         if(x<minx)minx=x;if(x>maxx)maxx=x;if(y<miny)miny=y;if(y>maxy)maxy=y;
-        const p=cur*4,r=px[p],g=px[p+1],b=px[p+2];
-        if(mag[cur]>getTune().edgeMagThresh){}
         let ang=ori[cur];if(ang<0)ang+=Math.PI*2;const bin=Math.min(11,Math.floor(ang/(Math.PI*2)*12));oriBins[bin]++;
         const neigh=[cur-1,cur+1,cur-w,cur+w];
         for(const n of neigh){if(n<0||n>=w*h)continue;if(!visited[n]&&binary[n]){visited[n]=1;q.push(n)}}
       }
-      const bboxArea=(maxx-minx+1)*(maxy-miny+1);const areaCount=coords.length;const solidity=areaCount/Math.max(1,bboxArea);
+      const bboxArea=(maxx-minx+1)*(maxy-miny+1);const solidity=area/Math.max(1,bboxArea);
       let maxBin=0,sumBins=0;for(let i=0;i<12;i++){if(oriBins[i]>maxBin)maxBin=oriBins[i];sumBins+=oriBins[i]}const oriDominance=maxBin/Math.max(1,sumBins);
-      const ok=(areaCount>=minArea)&&(areaCount<=maxArea)&&(solidity>=getTune().minSolidity)&&(oriDominance<=getTune().maxOriDominance);
-      return {ok,coords}
+      const ok=(area>=minArea)&&(area<=maxArea)&&(solidity>=getTune().minSolidity)&&(oriDominance<=getTune().maxOriDominance);
+      const centroid={x:cx/Math.max(1,area),y:cy/Math.max(1,area)};
+      return {ok,coords,centroid,area}
     }
-    for(let i=0;i<w*h;i++){if(visited[i]||!binary[i])continue;const {ok,coords}=flood(i);if(ok)for(const id of coords)keep[id]=1}
-    return keep
+    const blobs=[];
+    for(let i=0;i<w*h;i++){if(visited[i]||!binary[i])continue;const res=flood(i);if(res.ok){for(const id of res.coords)keep[id]=1;blobs.push(res)}}
+    return {keep,blobs}
   }
 
   const hitCircles=[];
-  function addHitCircle(cx,cy){hitCircles.push({x:cx,y:cy,ts:performance.now()}); if(hitCircles.length>80)hitCircles.shift()}
+  function addHitCircle(cx,cy){hitCircles.push({x:cx,y:cy,ts:performance.now()}); if(hitCircles.length>120)hitCircles.shift()}
   function drawHitCircles(ctx){
     const now=performance.now();
     for(const c of hitCircles){
-      const age=(now-c.ts)/1000; if(age>6) continue;
-      const a=Math.max(0,1-age/6); ctx.save(); ctx.globalAlpha=a; ctx.strokeStyle='rgba(239,68,68,1)'; ctx.lineWidth=2;
-      ctx.beginPath(); ctx.arc(c.x,c.y,16,0,Math.PI*2); ctx.stroke(); ctx.restore();
+      const age=(now-c.ts)/1000; if(age>5) continue;
+      const a=Math.max(0,1-age/5); ctx.save(); ctx.globalAlpha=a; ctx.strokeStyle='rgba(239,68,68,1)'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(c.x,c.y,18,0,Math.PI*2); ctx.stroke(); ctx.restore();
     }
   }
 
-  let map, gpsWatch=null, routeLine=null, routePts=[], pingMarkers=[];
-  function initMap(){
-    map=L.map('map',{zoomControl:true}); 
-    try{
-      L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{maxZoom:17,attribution:'Map: © OpenTopoMap, © OpenStreetMap contributors'}).addTo(map);
-    }catch{ 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
-    }
-    map.setView([38.0,-90.0],12);
-    routeLine=L.polyline([], {color:'#22c55e', weight:3}).addTo(map);
-    const saved=localStorage.getItem('ttd_pings'); if(saved){for(const p of JSON.parse(saved)){addPing(p.lat,p.lng)}}
-    const savedRoute=localStorage.getItem('ttd_route'); if(savedRoute){routePts=JSON.parse(savedRoute);routeLine.setLatLngs(routePts)}
-  }
-  function addPing(lat,lng){const m=L.marker([lat,lng]).addTo(map); m.bindPopup('Ping'); pingMarkers.push(m);
-    localStorage.setItem('ttd_pings', JSON.stringify(pingMarkers.map(pm=>pm.getLatLng())));}
-  function clearPings(){for(const pm of pingMarkers){map.removeLayer(pm)} pingMarkers.length=0; localStorage.removeItem('ttd_pings')}
-  function startGPS(){
-    if(!navigator.geolocation) return;
-    if(gpsWatch) return;
-    gpsWatch=navigator.geolocation.watchPosition(pos=>{
-      const {latitude:lat,longitude:lng}=pos.coords;
-      if(routePts.length===0) map.setView([lat,lng],15);
-      routePts.push([lat,lng]); routeLine.setLatLngs(routePts);
-      localStorage.setItem('ttd_route', JSON.stringify(routePts));
-    },err=>{console.log('gps err',err)},{enableHighAccuracy:true, maximumAge:2000, timeout:7000});
-  }
-  function stopGPS(){if(gpsWatch){navigator.geolocation.clearWatch(gpsWatch);gpsWatch=null}}
-
-  async function toggleTorch(){
-    if(!stream) return;
-    try{
-      const tracks=stream.getVideoTracks(); if(!tracks.length) return;
-      const t=tracks[0]; const cap=t.getCapabilities?.(); 
-      if(cap && 'torch' in cap){ await t.applyConstraints({advanced:[{torch: !torchOn}]}); torchOn=!torchOn; document.getElementById('torchBtn').textContent=torchOn?'Flashlight: On':'Flashlight'; return; }
-    }catch(e){console.log('torch error',e)}
-    document.body.style.background='#fff'; setTimeout(()=>{document.body.style.background='var(--bg)'}, 10000);
+  function requestFullscreen(){
+    const vp=$('viewport'), v=$('video');
+    if(vp.requestFullscreen){vp.requestFullscreen().catch(()=>{})}
+    else if(v && v.webkitEnterFullscreen){ try{ v.webkitEnterFullscreen(); }catch(e){} }
   }
 
-  document.getElementById('fsBtn').addEventListener('click',()=>{
-    const vp=document.getElementById('viewport');
-    if(document.fullscreenElement){document.exitFullscreen()}
-    else{vp.requestFullscreen?.()}
-  });
-  document.getElementById('torchBtn').addEventListener('click',toggleTorch);
-  document.getElementById('dropPing').addEventListener('click',()=>{if(map){const c=map.getCenter(); addPing(c.lat,c.lng)}});
-  document.getElementById('clearPings').addEventListener('click',clearPings);
-  document.getElementById('trackWalk').addEventListener('change',e=>{if(e.target.checked) startGPS(); else stopGPS()});
-
-  function vibrate(ms){ try{ if(document.getElementById('vibeToggle').checked && navigator.vibrate) navigator.vibrate(ms||50) }catch{} }
+  el.fsBtn.addEventListener('click', requestFullscreen);
 
   async function start(){
     if(stream) return;
     try{
-      document.getElementById('status').textContent='Requesting camera…';
+      el.status.textContent='Requesting camera…';
       stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30}},audio:false});
-    }catch(e){document.getElementById('msg').textContent='Camera error: '+e.message;return}
+    }catch(e){el.msg.textContent='Camera error: '+e.message;return}
     el.video.srcObject=stream; try{await el.video.play()}catch{}
     dispW=el.video.videoWidth||640; dispH=el.video.videoHeight||480;
     el.overlay.width=dispW; el.overlay.height=dispH;
     const scale=320/dispW; procW=Math.max(160,Math.round(dispW*scale)); procH=Math.max(120,Math.round(dispH*scale));
     proc.width=procW; proc.height=procH;
     el.startBtn.disabled=true; el.stopBtn.disabled=false; el.snapBtn.disabled=false; el.tapHint.style.display='none'; el.status.textContent='Streaming…';
-    if(document.getElementById('trackWalk').checked) startGPS();
 
     const ox=el.overlay.getContext('2d');
 
@@ -158,65 +127,84 @@
       frames++; if(ts-lastTS>1000){el.fps.textContent=frames+' fps'; frames=0; lastTS=ts}
       frameCount++;
 
-      pctx.drawImage(el.video,0,0,procW,procH);
-      const color=pctx.getImageData(0,0,procW,procH);
-      const d=color.data, sens=Number(el.sens.value)/100, thr=Number(el.thr.value)/100, tune=getTune();
-      const doLab = (!document.getElementById('fastMode').checked) || (frameCount%2===0);
+      // draw downscaled frame
+      proc.getContext('2d').drawImage(el.video,0,0,procW,procH);
+      const color=proc.getContext('2d').getImageData(0,0,procW,procH);
+      const d=color.data, sens=Number(el.sens.value)/100, thr=Number(el.thr.value)/100, tune=(PROFILES[el.profile.value]||PROFILES.aggressive);
+      const doLab = (!el.fastMode.checked) || (frameCount%2===0);
 
+      // pixel score
       const score=new Float32Array(procW*procH); let max=-1e9, min=1e9;
       for(let p=0,i=0;p<d.length;p+=4,i++){const s=scorePixel(d[p],d[p+1],d[p+2],sens,tune,doLab); score[i]=s; if(s>max)max=s; if(s<min)min=s;}
       const rng=Math.max(1e-6,max-min);
       const bin=new Uint8Array(procW*procH); for(let i=0;i<score.length;i++){const n=(score[i]-min)/rng; if(n>=thr) bin[i]=1;}
+
+      // edges every couple frames
       if(frameCount%3===1 || !edgesCache){
         const gray=new Float32Array(procW*procH);
         for(let p=0,i=0;p<d.length;p+=4,i++){gray[i]=0.299*d[p]+0.587*d[p+1]+0.114*d[p+2]}
         edgesCache=sobel(gray,procW,procH);
       }
-      const kept=filterBlobs(bin,procW,procH,color,tune,edgesCache);
+
+      const {keep,blobs}=filterBlobs(bin,procW,procH,color,tune,edgesCache);
 
       if(!persist){persist=new Uint8Array(procW*procH);stableMask=new Uint8Array(procW*procH)}
       const need=Number(el.stability.value);
-      let hitThisFrame=false; let cxSum=0, cySum=0, cCount=0;
-      for(let i=0;i<kept.length;i++){
-        if(kept[i]) persist[i]=Math.min(255,persist[i]+1); else persist[i]=Math.max(0,persist[i]-1); 
-        stableMask[i]=persist[i]>=need?1:0; 
-        if(stableMask[i]){ hitThisFrame=true; const x=i%procW, y=(i-x)/procW; cxSum+=x; cySum+=y; cCount++; }
-      }
-      if(hitThisFrame && cCount>20){
-        const cx=(cxSum/cCount)*dispW/procW, cy=(cySum/cCount)*dispH/procH;
-        addHitCircle(cx,cy); vibrate(30);
-      }
+      for(let i=0;i<keep.length;i++){ if(keep[i]) persist[i]=Math.min(255,persist[i]+1); else persist[i]=Math.max(0,persist[i]-1); stableMask[i]=(persist[i]>=need)?1:0; }
 
+      // Draw overlay according to mode
       ox.clearRect(0,0,dispW,dispH);
       const mode=el.overlayMode.value, alpha=Number(el.opacity.value)/100;
+
       if(mode==='debug'){
-        const heat=pctx.createImageData(procW,procH), dd=heat.data;
+        const heat=proc.getContext('2d').createImageData(procW,procH), dd=heat.data;
         for(let i=0,p=0;i<score.length;i++,p+=4){const n=(score[i]-min)/rng; dd[p]=Math.min(255,n*255); dd[p+1]=0; dd[p+2]=Math.min(255,(1-n)*255); dd[p+3]=255}
-        pctx.putImageData(heat,0,0); el.overlay.getContext('2d').drawImage(proc,0,0,dispW,dispH);
+        proc.getContext('2d').putImageData(heat,0,0); ox.drawImage(proc,0,0,dispW,dispH);
       }else{
-        const out=pctx.createImageData(procW,procH), od=out.data;
+        const out=proc.getContext('2d').createImageData(procW,procH), od=out.data;
         for(let i=0,p=0;i<stableMask.length;i++,p+=4){ if(stableMask[i]){ od[p]=235;od[p+1]=20;od[p+2]=20;od[p+3]=Math.floor(alpha*255);} }
-        pctx.putImageData(out,0,0); el.overlay.getContext('2d').drawImage(proc,0,0,dispW,dispH);
+        proc.getContext('2d').putImageData(out,0,0); ox.drawImage(proc,0,0,dispW,dispH);
+        if(mode==='contour'){
+          const imgData=proc.getContext('2d').getImageData(0,0,procW,procH).data;
+          ox.lineWidth=2; ox.strokeStyle='rgba(239,68,68,.95)'; ox.beginPath();
+          for(let y=1;y<procH-1;y+=2){ for(let x=1;x<procW-1;x+=2){ const idx=((y*procW)+x)*4;
+            if(imgData[idx+3]>0 && (imgData[idx-4+3]===0||imgData[idx+4+3]===0||imgData[idx-4*procW+3]===0||imgData[idx+4*procW+3]===0)){ ox.moveTo(x*dispW/procW,y*dispH/procH); ox.lineTo(x*dispW/procW+0.01,y*dispH/procH+0.01); } } }
+          ox.stroke();
+        }
       }
-      drawHitCircles(el.overlay.getContext('2d'));
+
+      // circles per blob centroid (require some stable pixels)
+      let anyHit=false;
+      for(const b of blobs){
+        let stableCnt=0;
+        for(const idx of b.coords){ if(stableMask[idx]) stableCnt++; }
+        if(stableCnt>12){
+          const cx=b.centroid.x*dispW/procW, cy=b.centroid.y*dispH/procH;
+          ox.save(); ox.strokeStyle='rgba(239,68,68,1)'; ox.lineWidth=2; ox.beginPath(); ox.arc(cx,cy,18,0,Math.PI*2); ox.stroke(); ox.restore();
+          anyHit=true;
+        }
+      }
+      if(anyHit) alertHit();
+
+      // optional trailing circles
+      // drawHitCircles(ox);
+
       anim=requestAnimationFrame(frame);
     }
     anim=requestAnimationFrame(frame);
   }
 
   function stop(){ if(anim)cancelAnimationFrame(anim); if(stream){stream.getTracks().forEach(t=>t.stop());stream=null} 
-    el.startBtn.disabled=false; el.stopBtn.disabled=true; el.snapBtn.disabled=true; el.tapHint.style.display=''; el.status.textContent='Stopped.'; 
-    if(window.navigator && navigator.geolocation) { /* stop gps */ } }
+    el.startBtn.disabled=false; el.stopBtn.disabled=true; el.snapBtn.disabled=true; el.tapHint.style.display=''; el.status.textContent='Stopped.'; }
 
   function snapshot(){ const a=document.createElement('a'); a.download=`ttd_${Date.now()}.png`; a.href=el.overlay.toDataURL('image/png'); a.click(); }
 
   if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{})}
-  let deferredPrompt=null; window.addEventListener('beforeinstallprompt',e=>{e.preventDefault(); deferredPrompt=e; document.getElementById('installBtn').style.display='inline-flex'});
-  document.getElementById('installBtn').onclick=()=>{ if(deferredPrompt){deferredPrompt.prompt(); deferredPrompt=null} }
+  let deferredPrompt=null; window.addEventListener('beforeinstallprompt',e=>{e.preventDefault(); deferredPrompt=e; el.installBtn.style.display='inline-flex'});
+  el.installBtn.onclick=()=>{ if(deferredPrompt){deferredPrompt.prompt(); deferredPrompt=null} }
   el.clearSW.onclick=async()=>{ if('caches' in window){ const keys=await caches.keys(); await Promise.all(keys.map(k=>caches.delete(k))); location.reload(); } }
 
-  window.addEventListener('load', initMap);
-  document.getElementById('viewport').addEventListener('click',()=>{ if(!stream) start() });
+  $('viewport').addEventListener('click',()=>{ if(!stream) start() });
   el.startBtn.addEventListener('click',start); el.stopBtn.addEventListener('click',stop); el.snapBtn.addEventListener('click',snapshot);
 
   el.msg.textContent='JS loaded. Ready.';

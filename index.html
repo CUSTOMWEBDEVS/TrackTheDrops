@@ -7,15 +7,13 @@
   <title>TrackTheDrop — Field</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="stylesheet" href="./style.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 </head>
 <body>
   <header class="topbar">
     <div class="brand"><span class="dot"></span><span>TrackTheDrop</span></div>
     <div class="actions">
       <button id="fsBtn" class="ghost">Fullscreen</button>
-      <button id="torchBtn" class="ghost">Flashlight</button>
-      <label class="toggle"><input type="checkbox" id="vibeToggle" checked><span>Vibrate</span></label>
+      <label class="toggle"><input type="checkbox" id="alertToggle" checked><span>Alert on hit</span></label>
       <button id="installBtn" class="ghost">Install</button>
     </div>
   </header>
@@ -26,6 +24,7 @@
       <video id="video" playsinline muted class="gray"></video>
       <canvas id="overlay" class="overlay"></canvas>
       <div class="tap-hint" id="tapHint">Tap to Start</div>
+      <div class="flash" id="flash"></div>
     </section>
 
     <section class="panel compact">
@@ -61,21 +60,8 @@
     </section>
   </main>
 
-  <section class="mapDock" id="mapDock">
-    <div class="mapHeader">
-      <strong>Topo Map</strong>
-      <div class="mapActions">
-        <button id="dropPing">Add Ping</button>
-        <button id="clearPings" class="ghost">Clear</button>
-        <label class="toggle"><input type="checkbox" id="trackWalk" checked><span>Track Walk</span></label>
-      </div>
-    </div>
-    <div id="map" class="map"></div>
-  </section>
-
   <footer class="foot"><small>Prototype — verify visually. Works offline after first load.</small></footer>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="./app.js"></script>
 </body>
 </html>

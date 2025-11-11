@@ -5,13 +5,14 @@
 .actions{display:flex;gap:8px;align-items:center}
 .toggle{display:flex;gap:6px;align-items:center;color:var(--muted)}
 .ghost{background:transparent;color:var(--muted);border:1px solid var(--line);padding:6px 10px;border-radius:10px}
-.layout{display:grid;grid-template-columns:1fr 320px;gap:12px;max-width:1400px;margin:10px auto;padding:0 10px}
+.layout{display:grid;grid-template-columns:1fr 320px;gap:12px;max-width:1200px;margin:10px auto;padding:0 10px}
 .onlyViewport{grid-template-columns:1fr 320px}
 .viewport{position:relative;background:#000;border:1px solid var(--line);border-radius:14px;overflow:hidden;min-height:340px}
 video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 video.gray{filter:grayscale(100%)}
 .overlay{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;pointer-events:none}
 .tap-hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:600;color:#fff;background:rgba(0,0,0,.35);backdrop-filter:blur(2px);z-index:6}
+.flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .15s ease;z-index:7}
 .hud{position:absolute;right:12px;top:12px;display:flex;gap:10px;font-size:12px;color:#d7deef;background:rgba(12,17,25,.6);padding:6px 8px;border-radius:10px;border:1px solid var(--line);z-index:5}
 .panel{display:flex;flex-direction:column;gap:12px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px}
@@ -22,17 +23,7 @@ button,select,input[type=range]{background:#0e1522;color:var(--ink);border:1px s
 button:disabled{opacity:.55;cursor:not-allowed}
 .hint{color:#ffd166;margin-top:6px;font-size:12px;white-space:pre-wrap}
 .foot{text-align:center;color:var(--muted);padding:10px 0 20px}
-
-/* Map dock */
-.mapDock{position:fixed;left:10px;right:10px;bottom:10px;height:42vh;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--panel);display:flex;flex-direction:column}
-.mapHeader{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line)}
-.mapActions{display:flex;gap:8px;align-items:center}
-.map{flex:1;min-height:200px}
-.leaflet-control-attribution{background:rgba(0,0,0,.45)!important;color:#cbd5e1!important}
-.leaflet-container{background:#0a0f16}
-/* Fullscreen on small screens */
 @media (max-width: 900px){
   .layout{grid-template-columns:1fr}
   .panel{order:3}
-  .mapDock{left:6px;right:6px;height:45vh}
 }
