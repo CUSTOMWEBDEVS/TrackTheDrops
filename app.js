@@ -2,13 +2,13 @@
   const $=id=>document.getElementById(id);
   const el={video:$('video'),overlay:$('overlay'),tapHint:$('tapHint'),status:$('status'),fps:$('fps'),
     startBtn:$('startBtn'),torchBtn:$('torchBtn'),alertBtn:$('alertBtn'),
-    fsBtn:$('fsBtn'),exitFS:$('exitFS'),flash:$('flash'),installBtn:$('installBtn'),
+    flash:$('flash'),installBtn:$('installBtn'),
     viewport:$('viewport'), app:$('app') };
 
   // ====== UI ======
   let uiTimer=null;
   const showUI=()=>{ el.app.classList.remove('hiddenUI'); if(uiTimer) clearTimeout(uiTimer); uiTimer=setTimeout(()=>el.app.classList.add('hiddenUI'),2200) }
-  ;['startBtn','torchBtn','alertBtn','fsBtn','exitFS','installBtn'].forEach(id=>{ const b=el[id]; if(!b) return; b.addEventListener('click', showUI); });
+  ;['startBtn','torchBtn','alertBtn','installBtn'].forEach(id=>{ const b=el[id]; if(!b) return; b.addEventListener('click', showUI); });
   el.viewport.addEventListener('click',()=>{ if(!stream){ start(); return; } showUI(); });
 
   // ====== Haptics ======
@@ -38,8 +38,7 @@
 
   const BASE={vMaxBase:0.66,vMin:0.08,sMinBase:0.52,hTolBase:14,aMinBase:34,bMaxBase:24,aDivBRatio:2.0,crRelBase:88,yMaxBase:190,
     minAreaFrac:0.0007,maxFrac:0.18,edgeMagThresh:58,maxEdgeDensity:0.26,maxSpecDensity:0.03,minSolidity:0.78,maxOriDominance:0.56};
-  const PROFILES={aggressive:{...BASE}};
-  const tune=PROFILES.aggressive;
+  const tune={...BASE};
 
   function toHSV(r,g,b){const rn=r/255,gn=g/255,bn=b/255;const max=Math.max(rn,gn,bn),min=Math.min(rn,gn,bn),d=max-min;let h=0;if(d!==0){if(max===rn)h=((gn-bn)/d+(gn<bn?6:0));else if(max===gn)h=((bn-rn)/d+2);else h=((rn-gn)/d+4);h/=6}const s=max===0?0:d/max,v=max;return {h,s,v}}
   function toYCbCr(r,g,b){const y=0.299*r+0.587*g+0.114*b;const cb=128-0.168736*r-0.331264*g+0.5*b;const cr=128+0.5*r-0.418688*g-0.081312*b;return {y,cb,cr}}
@@ -99,7 +98,7 @@
     proc.width=w; proc.height=h; procW=w; procH=h;
   }
 
-  // Start/Stop/FS
+  // Start/Stop
   let starting=false;
   async function start(){
     if(stream||starting) return; starting=true;
@@ -123,8 +122,7 @@
       sizeProcessingCanvas(); el.tapHint.style.display='none'; el.status.textContent='Streaming…';
       el.startBtn.textContent='Stop';
       frames=0; lastTS=performance.now(); frameCount=0; persist=null; stableMask=null; edgesCache=null;
-      showUI();
-      loop();
+      showUI(); loop();
     }catch(e){ el.status.textContent='Camera error'; } finally{ starting=false; }
   }
   function stop(){ if(anim) cancelAnimationFrame(anim); anim=null; if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null } el.tapHint.style.display=''; el.status.textContent='Stopped.'; el.startBtn.textContent='Start'; showUI(); }
@@ -140,21 +138,6 @@
     el.flash.style.opacity=(el.flash.style.opacity==='1'?'0':'1');
   }
   el.torchBtn.addEventListener('click', toggleTorch);
-
-  async function toggleFS(){
-    const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || el.viewport.classList.contains('fs'));
-    if(isFs){
-      if(document.exitFullscreen) await document.exitFullscreen().catch(()=>{});
-      el.viewport.classList.remove('fs');
-    }else{
-      if(el.viewport.requestFullscreen) await el.viewport.requestFullscreen().catch(()=>{});
-      el.viewport.classList.add('fs');
-    }
-    setTimeout(()=>{ if(stream) sizeProcessingCanvas() },80);
-    showUI();
-  }
-  el.fsBtn.addEventListener('click', toggleFS);
-  el.exitFS.addEventListener('click', toggleFS);
 
   el.alertBtn.addEventListener('click',()=>{
     const on = el.alertBtn.getAttribute('aria-pressed')!=='true';
@@ -173,7 +156,7 @@
 
       procCtx.drawImage(el.video,0,0,procW,procH);
       const img=procCtx.getImageData(0,0,procW,procH);
-      const d=img.data, sens=1.0, thr=0.15; // <- threshold raised to avoid full-frame masks
+      const d=img.data, sens=1.0, thr=0.15;
       const doLab=(frameCount%2===0);
 
       const score=new Float32Array(procW*procH); let max=-1e9, min=1e9;
@@ -181,19 +164,18 @@
       const rng=Math.max(1e-6,max-min);
       const bin=new Uint8Array(procW*procH); for(let i=0;i<score.length;i++){const n=(score[i]-min)/rng; if(n>=thr) bin[i]=1;}
 
-      // Edges for blob filter (every 3rd frame)
+      // Edges for blob filter
       if(frameCount%3===1 || !edgesCache){
         const gray=new Float32Array(procW*procH);
         for(let p=0,i=0;p<d.length;p+=4,i++){gray[i]=0.299*d[p]+0.587*d[p+1]+0.114*d[p+2]}
         edgesCache=sobel(gray,procW,procH);
       }
 
-      // === Persistence uses BIN directly (not filtered blobs) ===
+      // Persistence = raw bin
       if(!persist){persist=new Uint8Array(procW*procH);stableMask=new Uint8Array(procW*procH)}
-      const need=1;
-      for(let i=0;i<bin.length;i++){ if(bin[i]) persist[i]=Math.min(255,persist[i]+1); else persist[i]=Math.max(0,persist[i]-1); stableMask[i]=(persist[i]>=need)?1:0; }
+      for(let i=0;i<bin.length;i++){ if(bin[i]) persist[i]=Math.min(255,persist[i]+1); else persist[i]=Math.max(0,persist[i]-1); stableMask[i]=(persist[i]>=1)?1:0; }
 
-      // Blobs only for alerts & circles
+      // Blobs for circles + haptics (every distinct blob)
       const {blobs}=filterBlobs(bin,procW,procH,tune,edgesCache);
 
       const octx=el.overlay.getContext('2d'); octx.clearRect(0,0,el.overlay.width,el.overlay.height);
