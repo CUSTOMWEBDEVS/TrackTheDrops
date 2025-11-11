@@ -1,4 +1,8 @@
 (function(){
+  window.addEventListener('error', (e)=>{
+    const box = document.getElementById('msg'); if(box) box.textContent = 'JS error: ' + (e?.message||e);
+  });
+
   const el={video:document.getElementById('video'),overlay:document.getElementById('overlay'),
     startBtn:document.getElementById('startBtn'),stopBtn:document.getElementById('stopBtn'),snapBtn:document.getElementById('snapBtn'),
     thr:document.getElementById('thr'),thrVal:document.getElementById('thrVal'),sens:document.getElementById('sens'),sensVal:document.getElementById('sensVal'),
@@ -109,7 +113,7 @@
       pctx.drawImage(el.video,0,0,procW,procH);
       const color= pctx.getImageData(0,0,procW,procH);
       const d=color.data, sens=Number(el.sens.value)/100, thr=Number(el.thr.value)/100, tune=getTune();
-      const doLab = !el.fastMode.checked or (frameCount%2===0); // half the frames in fast mode
+      const doLab = (!el.fastMode.checked) || (frameCount%2===0); // FIXED
 
       // Compute score
       const score=new Float32Array(procW*procH); let min=1e9,max=-1e9;
@@ -117,9 +121,8 @@
       const rng=Math.max(1e-6,max-min);
       const bin=new Uint8Array(procW*procH); for(let i=0;i<score.length;i++){const n=(score[i]-min)/rng; if(n>=thr) bin[i]=1;}
 
-      // Edge map every 3 frames (cheap) on gray
+      // Edge map every 3 frames on gray
       if(frameCount%3===1 || !edgesCache){
-        // quick gray
         const gray=new Float32Array(procW*procH);
         for(let p=0,i=0;p<d.length;p+=4,i++){gray[i]=0.299*d[p]+0.587*d[p+1]+0.114*d[p+2]}
         edgesCache = sobel(gray,procW,procH);
@@ -143,7 +146,7 @@
         for(let i=0,p=0;i<stableMask.length;i++,p+=4){ if(stableMask[i]){ od[p]=235;od[p+1]=20;od[p+2]=20;od[p+3]=Math.floor(alpha*255);} }
         pctx.putImageData(out,0,0);
         ox.globalAlpha=1; ox.drawImage(proc,0,0,dispW,dispH);
-        if(mode==='contour'){ // quick sparse contour
+        if(mode==='contour'){
           const imgData = pctx.getImageData(0,0,procW,procH).data;
           ox.globalAlpha=1; ox.lineWidth=2; ox.strokeStyle='rgba(239,68,68,.95)'; ox.beginPath();
           for(let y=1;y<procH-1;y+=2){ for(let x=1;x<procW-1;x+=2){ const idx=((y*procW)+x)*4; if(imgData[idx+3]>0 && (imgData[idx-4+3]===0||imgData[idx+4+3]===0||imgData[idx-4*procW+3]===0||imgData[idx+4*procW+3]===0)){ ox.moveTo(x*dispW/procW,y*dispH/procH); ox.lineTo(x*dispW/procW+0.01,y*dispH/procH+0.01); } } }
@@ -164,7 +167,6 @@
     a.href=el.overlay.toDataURL('image/png'); a.click();
   }
 
-  // SW + helpers
   if('serviceWorker'in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{})}
   el.clearSW.onclick=async()=>{if('caches'in window){const names=await caches.keys();await Promise.all(names.map(n=>caches.delete(n)));location.reload()}}
   let deferredPrompt=null;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;el.installBtn.style.display='inline-flex'});
