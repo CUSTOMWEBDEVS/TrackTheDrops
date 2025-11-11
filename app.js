@@ -1,16 +1,19 @@
-// TrackTheDrop v7.9 — three-file build, robust init
+// TrackTheDrop v8.0 — cache-busting filenames, extra boot diagnostics
 (function(){
   const $=id=>document.getElementById(id);
   const el={video:$('video'),overlay:$('overlay'),tapHint:$('tapHint'),status:$('status'),fps:$('fps'),
     startBtn:$('startBtn'),torchBtn:$('torchBtn'),alertBtn:$('alertBtn'),
     flash:$('flash'),viewport:$('viewport'), app:$('app') };
+
+  function setStatus(s){ if(el.status) el.status.textContent=s; }
+  setStatus('Booting… (app ok)');
+
   const octx = el.overlay.getContext('2d');
+  if(!octx){ setStatus('ERR: overlay context null'); return; }
 
-  // Show errors on screen for field debugging
-  window.onerror = (msg, src, line, col, err)=>{ el.status.textContent = 'ERR: '+(err && err.message ? err.message : msg); };
-  window.onunhandledrejection = (e)=>{ el.status.textContent = 'PromiseERR: '+ (e.reason && e.reason.message ? e.reason : 'rejection'); };
+  window.onerror = (msg, src, line, col, err)=>{ setStatus('ERR: '+(err && err.message ? err.message : msg)); };
+  window.onunhandledrejection = (e)=>{ setStatus('PromiseERR: '+ (e.reason && e.reason.message ? e.reason : 'rejection')); };
 
-  // ===== UI =====
   let uiTimer=null;
   function showUI(){ el.app.classList.remove('hiddenUI'); if(uiTimer) clearTimeout(uiTimer); uiTimer=setTimeout(()=>el.app.classList.add('hiddenUI'),2200) }
   ;['startBtn','torchBtn','alertBtn'].forEach(id=>{
@@ -23,7 +26,6 @@
     showUI();
   });
 
-  // ===== Haptics =====
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
   let aCtx; try{ aCtx=new (window.AudioContext||window.webkitAudioContext)() }catch{}
   async function hapticPulse(){
@@ -33,7 +35,6 @@
     el.flash.style.opacity='0.45'; setTimeout(()=>el.flash.style.opacity='0',120);
   }
 
-  // ===== Camera & processing =====
   let stream=null, anim=null, lastTS=0, frames=0;
   let dispW=640, dispH=480, procW=320, procH=240, frameCount=0;
   let persist=null, stableMask=null, edgesCache=null;
@@ -107,12 +108,11 @@
     proc.width=w; proc.height=h; procW=w; procH=h;
   }
 
-  // Start/Stop
   let starting=false;
   async function start(){
     if(stream||starting) return; starting=true;
     try{
-      el.status.textContent='Requesting camera…';
+      setStatus('Requesting camera…');
       const tries=[
         {video:{facingMode:{exact:'environment'},width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30}}},
         {video:{facingMode:{ideal:'environment'}}},
@@ -127,23 +127,23 @@
           if(s) break;
         }catch(e){ lastErr=e && e.name ? e.name : 'err'; }
       }
-      if(!s){ el.status.textContent='Camera failed: '+lastErr; starting=false; return; }
+      if(!s){ setStatus('Camera failed: '+lastErr); starting=false; return; }
       stream=s; el.video.srcObject=stream;
       await new Promise(res=>{
         const done=()=>{ el.video.removeEventListener('loadedmetadata',done); res(); };
         el.video.addEventListener('loadedmetadata',done); setTimeout(done,300);
       });
       try{ await el.video.play() }catch{}
-      sizeProcessingCanvas(); el.tapHint.style.display='none'; el.status.textContent='Streaming…';
+      sizeProcessingCanvas(); el.tapHint.style.display='none'; setStatus('Streaming…');
       el.startBtn.textContent='Stop';
       frames=0; lastTS=performance.now(); frameCount=0; persist=null; stableMask=null; edgesCache=null;
       showUI(); loop();
-    }catch(e){ el.status.textContent='Camera error'; } finally{ starting=false; }
+    }catch(e){ setStatus('Camera error'); } finally{ starting=false; }
   }
   function stop(){
     if(anim) cancelAnimationFrame(anim); anim=null;
     if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null }
-    el.tapHint.style.display=''; el.status.textContent='Stopped.'; el.startBtn.textContent='Start'; showUI();
+    el.tapHint.style.display=''; setStatus('Stopped.'); el.startBtn.textContent='Start'; showUI();
   }
   el.startBtn.addEventListener('click',(e)=>{ e.stopPropagation(); stream?stop():start() }, true);
 
@@ -188,6 +188,9 @@
       const vw=el.video.videoWidth|0, vh=el.video.videoHeight|0;
       if(vw && vh){ setViewportSize(); }
 
+      const octx = el.overlay.getContext('2d'); // refresh context if canvas reattached
+      if(!octx){ setStatus('ERR: overlay ctx lost'); cancelAnimationFrame(anim); return; }
+
       procCtx.drawImage(el.video,0,0,procW,procH);
       const img=procCtx.getImageData(0,0,procW,procH);
       const d=img.data, sens=1.0, thr=0.15;
@@ -209,31 +212,37 @@
 
       const {blobs}=filterBlobs(bin,procW,procH,tune,edgesCache);
 
-      octx.clearRect(0,0,el.overlay.width,el.overlay.height);
       const out=procCtx.createImageData(procW,procH), od=out.data, alpha=0.87;
       for(let i=0,p=0;i<stableMask.length;i++,p+=4){ if(stableMask[i]){ od[p]=235;od[p+1]=20;od[p+2]=20;od[p+3]=Math.floor(alpha*255);} }
-      procCtx.putImageData(out,0,0); octx.drawImage(proc,0,0,el.overlay.width,el.overlay.height);
+      procCtx.putImageData(out,0,0);
+
+      // Draw to overlay
+      const cw = el.overlay.width, ch = el.overlay.height;
+      const ctx = el.overlay.getContext('2d');
+      ctx.clearRect(0,0,cw,ch);
+      ctx.drawImage(proc,0,0,cw,ch);
 
       let anyHit=false;
       for(const b of blobs){
         let stableCnt=0; for(const idx of b.coords){ if(stableMask[idx]) stableCnt++ }
         if(stableCnt>12){
-          const cx=b.centroid.x*el.overlay.width/procW, cy=b.centroid.y*el.overlay.height/procH;
-          octx.save();
-          octx.strokeStyle='rgba(180,0,255,1)'; // bright purple
-          octx.shadowBlur=8; octx.shadowColor='rgba(180,0,255,0.9)';
-          octx.lineWidth=3; octx.beginPath(); octx.arc(cx,cy,18,0,Math.PI*2); octx.stroke(); octx.restore();
+          const cx=b.centroid.x*cw/procW, cy=b.centroid.y*ch/procH;
+          ctx.save();
+          ctx.strokeStyle='rgba(180,0,255,1)';
+          ctx.shadowBlur=8; ctx.shadowColor='rgba(180,0,255,0.9)';
+          ctx.lineWidth=3; ctx.beginPath(); ctx.arc(cx,cy,18,0,Math.PI*2); ctx.stroke(); ctx.restore();
           anyHit=true;
         }
       }
       if(anyHit) hapticPulse();
       anim=requestAnimationFrame(loop);
     }catch(e){
-      el.status.textContent='Loop error';
+      setStatus('Loop error');
       cancelAnimationFrame(anim);
     }
   }
 
+  // Helper funcs (local scope)
   function hueDistDeg(hDeg,ref){ let d=Math.abs(hDeg-ref)%360; if(d>180)d=360-d; return d }
   function toHSV(r,g,b){const rn=r/255,gn=g/255,bn=b/255;const max=Math.max(rn,gn,bn),min=Math.min(rn,gn,bn),d=max-min;let h=0;if(d!==0){if(max===rn)h=((gn-bn)/d+(gn<bn?6:0));else if(max===gn)h=((bn-rn)/d+2);else h=((rn-gn)/d+4);h/=6}const s=max===0?0:d/max,v=max;return {h,s,v}}
   function toYCbCr(r,g,b){const y=0.299*r+0.587*g+0.114*b;const cb=128-0.168736*r-0.331264*g+0.5*b;const cr=128+0.5*r-0.418688*g-0.081312*b;return {y,cb,cr}}

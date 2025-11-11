@@ -4,8 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#0b0e13">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>TrackTheDrop — Mobile</title>
-  <link rel="stylesheet" href="./style.css?v=7.9">
+  <link rel="stylesheet" href="./style.v8.css">
 </head>
 <body>
   <main class="app" id="app">
@@ -29,7 +32,17 @@
     </section>
   </main>
 
-  <!-- Defer ensures DOM exists before script runs; version busts SW cache -->
-  <script defer src="./app.js?v=7.9"></script>
+  <!-- SW nudge so cached app.js updates -->
+  <script>
+  (function(){
+    // Visible heartbeat: proves THIS index.html ran
+    try { var st = document.getElementById('status'); if(st) st.textContent = 'Booting… (index ok)'; } catch(e){}
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.update())).catch(()=>{});
+    }
+  })();
+  </script>
+
+  <script defer src="./app.v8.js"></script>
 </body>
 </html>
