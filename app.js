@@ -10,6 +10,12 @@
 
   setStatus('Booting… (app ok)');
 
+  // --- Debug toggles (no UI changes): press 'D' to see red mask
+  let DEBUG_MASK=false;
+  window.addEventListener('keydown', (e)=>{
+    if(e.key==='d' || e.key==='D'){ DEBUG_MASK = !DEBUG_MASK; setStatus(DEBUG_MASK?'Debug mask on':'Streaming…'); }
+  });
+
   // Haptics
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
   let aCtx; try{ aCtx = new (window.AudioContext||window.webkitAudioContext)(); } catch{}
@@ -41,95 +47,62 @@
   }
   window.addEventListener('resize', ()=>{ if(stream) setViewportSize(); });
 
-  // Tuning
-  const BASE={
-    vMaxBase:0.66, vMin:0.08, sMinBase:0.52, hTolBase:14,
-    aMinBase:34, bMaxBase:24, aDivBRatio:2.0, crRelBase:88, yMaxBase:190,
-    minAreaFrac:0.0002,  /* more permissive than before */
-    maxFrac:0.25
-  };
-  const tune = {...BASE};
-
-  // Color helpers
-  function hueDistDeg(hDeg,ref){ let d=Math.abs(hDeg-ref)%360; if(d>180)d=360-d; return d; }
-  function toHSV(r,g,b){
-    const rn=r/255, gn=g/255, bn=b/255;
-    const max=Math.max(rn,gn,bn), min=Math.min(rn,gn,bn), d=max-min; let h=0;
-    if(d!==0){ if(max===rn) h=((gn-bn)/d+(gn<bn?6:0)); else if(max===gn) h=((bn-rn)/d+2); else h=((rn-gn)/d+4); h/=6; }
-    const s=max===0?0:d/max, v=max; return {h,s,v};
-  }
+  // Helpers
   function toYCbCr(r,g,b){
     const y=0.299*r+0.587*g+0.114*b;
     const cb=128-0.168736*r-0.331264*g+0.5*b;
     const cr=128+0.5*r-0.418688*g-0.081312*b;
     return {y,cb,cr};
   }
-  function srgb2lin(c){ c/=255; return (c<=0.04045)?c/12.92:Math.pow((c+0.055)/1.055,2.4); }
-  function toLab(r,g,b){
-    const R=srgb2lin(r), G=srgb2lin(g), B=srgb2lin(b);
-    const X=0.4124564*R+0.3575761*G+0.1804375*B;
-    const Y=0.2126729*R+0.7151522*G+0.0721750*B;
-    const Z=0.0193339*R+0.1191920*G+0.9503041*B;
-    const Xn=0.95047, Yn=1.0, Zn=1.08883;
-    const f=t=>{const d=6/29; return (t>Math.pow(d,3))?Math.cbrt(t):t/(3*d*d)+4/29;};
-    const fx=f(X/Xn), fy=f(Y/Yn), fz=f(Z/Zn);
-    return {L:116*fy-16, a:500*(fx-fy), b:200*(fy-fz)};
+  function sigmoid(x){ return 1/(1+Math.exp(-x)); }
+
+  // Aggressive scorer combining simple redness + YCbCr; avoids Lab/hue gates that reject bright reds
+  function redScoreAggressive(r,g,b){
+    // basic contrasts
+    const dRG = r - g;
+    const dRB = r - b;
+    // clamp negatives
+    const cRG = dRG < 0 ? 0 : dRG;
+    const cRB = dRB < 0 ? 0 : dRB;
+    const {y,cb,cr} = toYCbCr(r,g,b);
+    const crRel = cr - 0.55*cb; // skin/blood axis
+    // Normalize terms roughly to 0..1
+    const nRG = cRG / 255;
+    const nRB = cRB / 255;
+    const nCr = (crRel - 40) / 100; // ~0 at 40, ~1 near 140
+    const nY  = (y - 140) / 120;   // penalize very bright highlights
+    // linear combo then squash
+    const s = 1.2*nRG + 1.0*nRB + 0.9*nCr - 0.6*Math.max(0,nY);
+    return sigmoid(3.2*(s-0.55)); // center ~0.55; tuneable
   }
 
-  function scorePixel(r,g,b,sens,t,doLab){
-    if(!(r>g && g>=b)) return 0;
-    const {h,s,v}=toHSV(r,g,b);
-    const hDeg=h*360, hTol=t.hTolBase+10*(1-sens), sMin=t.sMinBase-0.25*(1-sens), vMax=t.vMaxBase+0.10*(1-sens);
-    if(hueDistDeg(hDeg,0)>hTol || s<sMin || v<t.vMin || v>vMax) return 0;
-    const r_g=r/Math.max(1,g), r_b=r/Math.max(1,b);
-    if(r_g<(1.28-0.1*sens) || r_b<(1.9-0.3*sens) || (r-g)<12 || (r-b)<26) return 0;
-    const {y,cb,cr}=toYCbCr(r,g,b); const crRel=cr-0.55*cb;
-    if(y>t.yMaxBase+25*(1-sens) || crRel<t.crRelBase-20*(1-sens)) return 0;
-    if(doLab){
-      const {L,a,b:bb}=toLab(r,g,b);
-      if(a<t.aMinBase-8*(1-sens) || bb>t.bMaxBase+8*(1-sens) || (a/Math.max(1e-3,bb))<t.aDivBRatio || L>64) return 0;
-    }
-    return 1;
-  }
-
-  function filterBlobs(binary,w,h,t){
+  // components (8-neighborhood) for grouping
+  function filterBlobs(binary,w,h,minArea,maxArea){
     const visited=new Uint8Array(w*h);
-    const minArea=Math.max(6,Math.floor(w*h*t.minAreaFrac)), maxArea=Math.floor(w*h*t.maxFrac);
     function flood(start){
       const q=[start]; visited[start]=1;
       let area=0, cx=0, cy=0;
       while(q.length){
         const cur=q.pop(); area++;
         const x=cur%w, y=(cur-x)/w; cx+=x; cy+=y;
-        // 8-connected neighborhood to keep small spots together
-        const neigh=[
-          cur-1,cur+1,cur-w,cur+w,
-          cur-w-1,cur-w+1,cur+w-1,cur+w+1
-        ];
+        const neigh=[cur-1,cur+1,cur-w,cur+w,cur-w-1,cur-w+1,cur+w-1,cur+w+1];
         for(const n of neigh){
           if(n<0||n>=w*h) continue;
           if(!visited[n] && binary[n]){ visited[n]=1; q.push(n); }
         }
       }
-      const centroid={x:cx/area, y:cy/area};
-      return { ok:(area>=minArea && area<=maxArea), area, centroid };
+      return {area, centroid:{x:cx/area, y:cy/area}};
     }
     const blobs=[];
     for(let i=0;i<w*h;i++){
       if(visited[i]||!binary[i]) continue;
-      const r=flood(i); if(r.ok) blobs.push(r);
+      const r=flood(i);
+      if(r.area>=minArea && r.area<=maxArea) blobs.push(r);
     }
-    return {blobs};
+    return blobs;
   }
 
-  function sizeProcessingCanvas(){
-    setViewportSize();
-    const scale = 320/Math.max(1,dispW);
-    proc.width = Math.max(160, Math.round(dispW*scale));
-    proc.height = Math.max(120, Math.round(dispH*scale));
-    procW = proc.width; procH = proc.height;
-  }
-
+  // Start/Stop (no auto-restart)
   let starting=false;
   async function start(){
     if(stream || starting) return; starting=true;
@@ -144,7 +117,11 @@
       for(const c of tries){ try{ s=await navigator.mediaDevices.getUserMedia(c); if(s) break; } catch(e){ lastErr=e.name||'err'; } }
       if(!s){ setStatus('Camera failed: '+lastErr); starting=false; return; }
       stream=s; el.video.srcObject=s; await el.video.play();
-      sizeProcessingCanvas(); setStatus('Streaming…'); el.startBtn.textContent='Stop';
+      setViewportSize();
+      proc.width = Math.max(240, Math.round(dispW*0.5));
+      proc.height= Math.max(180, Math.round(dispH*0.5));
+      procW=proc.width; procH=proc.height;
+      setStatus('Streaming…'); el.startBtn.textContent='Stop';
       frames=0; lastTS=performance.now();
       loop();
     }catch(e){ setStatus('Camera error: '+(e && e.name ? e.name : '')); }
@@ -154,9 +131,11 @@
     if(anim) cancelAnimationFrame(anim); anim=null;
     if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
     setStatus('Stopped.'); el.startBtn.textContent='Start';
+    octx.clearRect(0,0,el.overlay.width,el.overlay.height);
   }
   el.startBtn.addEventListener('click', e=>{ e.stopPropagation(); (stream?stop():start()); }, true);
 
+  // Torch
   async function toggleTorch(e){
     e.stopPropagation();
     try{
@@ -195,39 +174,82 @@
     procCtx.drawImage(el.video, 0, 0, procW, procH);
     const img = procCtx.getImageData(0,0,procW,procH), d=img.data;
 
-    const sens=1.0, THR=0.05; // more permissive
-
+    // Aggressive red score, then binarize
     const score = new Float32Array(procW*procH);
     let max=-1e9, min=1e9;
     for(let p=0,i=0;p<d.length;p+=4,i++){
-      const s = scorePixel(d[p], d[p+1], d[p+2], sens, tune, true);
+      const s = redScoreAggressive(d[p], d[p+1], d[p+2]);
       score[i]=s; if(s>max)max=s; if(s<min)min=s;
     }
     const rng=Math.max(1e-6,max-min);
     const bin=new Uint8Array(procW*procH);
-    for(let i=0;i<score.length;i++){ const n=(score[i]-min)/rng; if(n>=THR) bin[i]=1; }
+    const THR = 0.35; // permissive but avoids false flood
+    for(let i=0;i<score.length;i++){
+      const n=(score[i]-min)/rng;
+      if(n>=THR) bin[i]=1;
+    }
 
-    const {blobs} = filterBlobs(bin, procW, procH, tune);
+    // components
+    const minArea = Math.max(4, Math.floor(procW*procH*0.00015));
+    const maxArea = Math.floor(procW*procH*0.3);
+    const blobs = filterBlobs(bin, procW, procH, minArea, maxArea);
 
+    // draw
     octx.clearRect(0,0,el.overlay.width,el.overlay.height);
 
+    if(DEBUG_MASK){
+      // visualize the mask in red
+      const mask = octx.createImageData(el.overlay.width, el.overlay.height);
+      for(let y=0;y<el.overlay.height;y++){
+        for(let x=0;x<el.overlay.width;x++){
+          const sx = Math.floor(x*procW/el.overlay.width);
+          const sy = Math.floor(y*procH/el.overlay.height);
+          const idx = sy*procW+sx;
+          const on = bin[idx] ? 255 : 0;
+          const di = (y*el.overlay.width + x)*4;
+          mask.data[di]=on; mask.data[di+1]=0; mask.data[di+2]=0; mask.data[di+3]=on?140:0;
+        }
+      }
+      octx.putImageData(mask,0,0);
+    }
+
     let any=false;
-    for(const b of blobs){
-      const cx=b.centroid.x*el.overlay.width/procW;
-      const cy=b.centroid.y*el.overlay.height/procH;
-      octx.save();
-      octx.strokeStyle='#b400ff';
-      octx.lineWidth=3;
-      octx.shadowBlur=10;
-      octx.shadowColor='rgba(180,0,255,0.95)';
-      octx.beginPath(); octx.arc(cx, cy, 18, 0, Math.PI*2); octx.stroke();
-      octx.beginPath(); octx.arc(cx, cy, 28, 0, Math.PI*2); octx.stroke();
-      octx.restore();
-      any=true;
+    // also mark top N hotspots even if blobbing failed
+    if(blobs.length===0){
+      // pick top 5 scores
+      const idxs=[...score.keys()].sort((a,b)=>score[b]-score[a]).slice(0,5);
+      for(const i of idxs){
+        const x=(i%procW)*el.overlay.width/procW;
+        const y=Math.floor(i/procW)*el.overlay.height/procH;
+        drawRings(x,y); any=true;
+      }
+    }else{
+      for(const b of blobs){
+        const cx=b.centroid.x*el.overlay.width/procW;
+        const cy=b.centroid.y*el.overlay.height/procH;
+        drawRings(cx,cy); any=true;
+      }
     }
     if(any) hapticPulse();
     anim = requestAnimationFrame(loop);
   }
 
-  window.__TTD__ = { start, stop };
+  function drawRings(cx,cy){
+    const radii=[16,26];
+    octx.save();
+    octx.strokeStyle='#b400ff';
+    octx.lineWidth=3;
+    octx.shadowBlur=10;
+    octx.shadowColor='rgba(180,0,255,0.95)';
+    for(const r of radii){
+      octx.beginPath(); octx.arc(cx, cy, r, 0, Math.PI*2); octx.stroke();
+    }
+    octx.restore();
+  }
+
+  // Start/Stop exposure
+  let starting=false_ref; // placeholder to avoid accidental duplicate symbol elsewhere
+  async function startWrapper(){ return start(); }
+  function stopWrapper(){ return stop(); }
+  window.__TTD__ = { start:startWrapper, stop:stopWrapper };
 })();
