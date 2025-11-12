@@ -28,23 +28,27 @@
   function toLab(r,g,b){const R=srgb2lin(r),G=srgb2lin(g),B=srgb2lin(b);const X=0.4124564*R+0.3575761*G+0.1804375*B;const Y=0.2126729*R+0.7151522*G+0.0721750*B;const Z=0.0193339*R+0.1191920*G+0.9503041*B;const Xn=0.95047,Yn=1.0,Zn=1.08883;const f=t=>{const d=6/29;return(t>Math.pow(d,3))?Math.cbrt(t):t/(3*d*d)+4/29};const fx=f(X/Xn),fy=f(Y/Yn),fz=f(Z/Zn);return {L:116*fy-16,a:500*(fx-fy),b:200*(fy-fz)}}
   const hueDist=(deg,ref)=>{let d=Math.abs(deg-ref)%360;return d>180?360-d:d};
 
-  // Strict “is-blood-like” boolean test; returns 1 or 0
+  // Slightly relaxed “is-blood-like” boolean gate
   function isBloodish(r,g,b,sens){
     if(!(r>g && g>=b)) return 0;
     const {h,s,v}=toHSV(r,g,b); const hDeg=h*360;
-    const hTol = 10 + 6*(1-sens);                // tight hue window around 0°
+    const hTol = 14 + 6*(1-sens);                 // widen hue window a bit
     if(hueDist(hDeg,0)>hTol) return 0;
-    if(s < (0.58 - 0.12*(sens))) return 0;       // demand saturation
-    if(v < 0.10 || v > (0.62 + 0.05*(1-sens))) return 0; // reject very bright highlights
-    if((r-g) < 16 || (r-b) < 28) return 0;       // channel dominance
+    if(s < (0.53 - 0.10*(sens))) return 0;        // allow slightly lower saturation
+    if(v < 0.08 || v > (0.70 + 0.04*(1-sens))) return 0; // allow brighter dark reds but still cap bright highlights
 
-    const {y,cb,cr}=toYCbCr(r,g,b);              // YCbCr gates
+    // Channel dominance (slightly looser)
+    if((r-g) < 12 || (r-b) < 20) return 0;
+
+    // YCbCr: lower Cr' threshold, raise Y cap a touch
+    const {y,cb,cr}=toYCbCr(r,g,b);
     const crRel = cr - 0.55*cb;
-    if (crRel < (95 - 10*sens)) return 0;
-    if (y > (182 + 8*(1-sens))) return 0;
+    if (crRel < (85 - 8*sens)) return 0;
+    if (y > (192 + 8*(1-sens))) return 0;
 
-    const L = toLab(r,g,b);                      // Lab anti-plastic
-    if (L.a < (36 - 6*(1-sens)) || L.b > (18 + 6*(1-sens)) || L.L > 66) return 0;
+    // Lab anti-plastic loosened
+    const L = toLab(r,g,b);
+    if (L.a < (30 - 6*(1-sens)) || L.b > (26 + 6*(1-sens)) || L.L > 72) return 0;
 
     return 1;
   }
@@ -113,10 +117,11 @@
 
     pctx.drawImage(el.video,0,0,procW,procH);
     const img=pctx.getImageData(0,0,procW,procH), d=img.data;
-    const sens = el.sens ? Number(el.sens.value)/100 : 0.7;
-    const thr  = el.thr  ? Number(el.thr.value)/100  : 0.70;   // slightly higher default
-    const need = el.stability ? Math.max(1, Number(el.stability.value)) : 3;
-    const alpha= el.opacity ? Number(el.opacity.value)/100 : 0.55;
+    // Use your older “good” feel: Sens ~0.70, Thr ~0.65, Stability ~2
+    const sens = el.sens ? Number(el.sens.value)/100 : 0.70;
+    const thr  = el.thr  ? Number(el.thr.value)/100  : 0.65;
+    const need = el.stability ? Math.max(1, Number(el.stability.value)) : 2;
+    const alpha= el.opacity ? Number(el.opacity.value)/100 : 0.60;
 
     const score=new Float32Array(procW*procH);
     let max=-1e9,min=1e9;
@@ -128,9 +133,9 @@
     if(!persist){ persist=new Uint8Array(procW*procH); stable=new Uint8Array(procW*procH); }
     for(let i=0;i<bin.length;i++){ persist[i]=bin[i]?Math.min(255,persist[i]+1):Math.max(0,persist[i]-1); stable[i]=(persist[i]>=need)?1:0; }
 
-    const minArea=Math.max(8, Math.floor(procW*procH*0.00025));
-    const maxArea=Math.floor(procW*procH*0.15);
-    const found=(function(binary,w,h){const vis=new Uint8Array(w*h);const out=[];function flood(s){const q=[s];vis[s]=1;let a=0,cx=0,cy=0;while(q.length){const i=q.pop();a++;const x=i%w,y=(i-x)/w;cx+=x;cy+=y;const ns=[i-1,i+1,i-w,i+w,i-w-1,i-w+1,i+w-1,i+w+1];for(const n of ns){if(n<0||n>=w*h)continue;if(!vis[n]&&binary[n]){vis[n]=1;q.push(n);}}}return{area:a,centroid:{x:cx/a,y:cy/a}}}for(let i=0;i<w*h;i++){if(!vis[i]&&binary[i]){const r=flood(i);if(r.area>=minArea&&r.area<=maxArea)out.push(r)}}return out})(stable,procW,procH);
+    const minArea=Math.max(6, Math.floor(procW*procH*0.00018));
+    const maxArea=Math.floor(procW*procH*0.16);
+    const found=blobs(stable,procW,procH,minArea,maxArea);
 
     octx.clearRect(0,0,el.overlay.width,el.overlay.height);
     if(alpha>0){
@@ -149,6 +154,6 @@
     anim=requestAnimationFrame(loop);
   }
 
-  setStatus('Booting… (strict)');
+  setStatus('Booting… (relaxed strict)');
   window.__TTD__={start:()=>{ if(!stream) start(); }, stop:()=>{ if(stream) stop(); }};
 })();
