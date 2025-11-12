@@ -7,8 +7,10 @@
     flash:$('flash'), viewport:$('viewport'), app:$('app')
   };
   const setStatus = (s)=>{ if(el.status) el.status.textContent = s; };
+
   setStatus('Booting… (app ok)');
 
+  // Haptics
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
   let aCtx; try{ aCtx = new (window.AudioContext||window.webkitAudioContext)(); } catch{}
   async function hapticPulse(){
@@ -25,6 +27,7 @@
     el.flash.style.opacity='0.45'; setTimeout(()=>el.flash.style.opacity='0',120);
   }
 
+  // Video / processing
   let stream=null, anim=null, frames=0, lastTS=0;
   let dispW=640, dispH=480, procW=320, procH=240;
   const proc=document.createElement('canvas'), procCtx=proc.getContext('2d',{willReadFrequently:true});
@@ -38,13 +41,16 @@
   }
   window.addEventListener('resize', ()=>{ if(stream) setViewportSize(); });
 
+  // Tuning
   const BASE={
     vMaxBase:0.66, vMin:0.08, sMinBase:0.52, hTolBase:14,
     aMinBase:34, bMaxBase:24, aDivBRatio:2.0, crRelBase:88, yMaxBase:190,
-    minAreaFrac:0.0007, maxFrac:0.18
+    minAreaFrac:0.0002,  /* more permissive than before */
+    maxFrac:0.25
   };
   const tune = {...BASE};
 
+  // Color helpers
   function hueDistDeg(hDeg,ref){ let d=Math.abs(hDeg-ref)%360; if(d>180)d=360-d; return d; }
   function toHSV(r,g,b){
     const rn=r/255, gn=g/255, bn=b/255;
@@ -91,17 +97,28 @@
     const minArea=Math.max(6,Math.floor(w*h*t.minAreaFrac)), maxArea=Math.floor(w*h*t.maxFrac);
     function flood(start){
       const q=[start]; visited[start]=1;
-      const coords=[]; let area=0, cx=0, cy=0;
+      let area=0, cx=0, cy=0;
       while(q.length){
-        const cur=q.pop(); coords.push(cur); area++;
+        const cur=q.pop(); area++;
         const x=cur%w, y=(cur-x)/w; cx+=x; cy+=y;
-        const neigh=[cur-1,cur+1,cur-w,cur+w];
-        for(const n of neigh){ if(n<0||n>=w*h)continue; if(!visited[n]&&binary[n]){ visited[n]=1; q.push(n); } }
+        // 8-connected neighborhood to keep small spots together
+        const neigh=[
+          cur-1,cur+1,cur-w,cur+w,
+          cur-w-1,cur-w+1,cur+w-1,cur+w+1
+        ];
+        for(const n of neigh){
+          if(n<0||n>=w*h) continue;
+          if(!visited[n] && binary[n]){ visited[n]=1; q.push(n); }
+        }
       }
-      return { ok:(area>=minArea && area<=maxArea), coords, centroid:{x:cx/area, y:cy/area}, area };
+      const centroid={x:cx/area, y:cy/area};
+      return { ok:(area>=minArea && area<=maxArea), area, centroid };
     }
     const blobs=[];
-    for(let i=0;i<w*h;i++){ if(visited[i]||!binary[i]) continue; const r=flood(i); if(r.ok) blobs.push(r); }
+    for(let i=0;i<w*h;i++){
+      if(visited[i]||!binary[i]) continue;
+      const r=flood(i); if(r.ok) blobs.push(r);
+    }
     return {blobs};
   }
 
@@ -177,7 +194,8 @@
     if(el.video.videoWidth|0){ setViewportSize(); }
     procCtx.drawImage(el.video, 0, 0, procW, procH);
     const img = procCtx.getImageData(0,0,procW,procH), d=img.data;
-    const sens=1.0, THR=0.10;
+
+    const sens=1.0, THR=0.05; // more permissive
 
     const score = new Float32Array(procW*procH);
     let max=-1e9, min=1e9;
@@ -191,7 +209,7 @@
 
     const {blobs} = filterBlobs(bin, procW, procH, tune);
 
-    octx.clearRect(0,0,el.overlay.width,el.overlay.height); // draw only circles
+    octx.clearRect(0,0,el.overlay.width,el.overlay.height);
 
     let any=false;
     for(const b of blobs){
