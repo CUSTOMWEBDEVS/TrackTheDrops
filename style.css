@@ -58,10 +58,10 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:g
 .install-panel{
   position:relative;
   width:100%;
-  max-width:480px;
+  max-width:520px;
   background:var(--panel);
   border-radius:18px 18px 0 0;
-  padding:16px 16px 18px;
+  padding:18px 18px 20px;
   box-shadow:0 16px 40px rgba(0,0,0,.65);
   border:1px solid var(--line);
 }
@@ -80,36 +80,61 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:g
   font-size:20px;
   cursor:pointer;
 }
-.install-intro{
-  margin:8px 0 12px;
+#installTitle{
+  margin:0 0 4px;
+  font-size:18px;
+}
+.install-env{
+  margin:4px 0 12px;
   font-size:14px;
   color:var(--muted);
 }
-.install-grid{
-  display:flex;
-  gap:8px;
-  margin-bottom:12px;
-}
-.install-os{
-  flex:1;
-  border-radius:999px;
-  border:1px solid var(--line);
-  background:#050914;
-  color:var(--ink);
-  padding:8px 10px;
-  font-size:13px;
-  font-weight:500;
-  cursor:pointer;
-}
+
 .install-steps{
-  font-size:13px;
-  color:var(--muted);
-  line-height:1.4;
+  font-size:15px;
+  color:var(--ink);
+  line-height:1.5;
 }
 .install-steps ol{
-  padding-left:18px;
-  margin:6px 0 0;
+  padding-left:22px;
+  margin:8px 0 0;
+}
+.install-steps li{
+  margin-bottom:8px;
+}
+.install-step-title{
+  font-weight:700;
+  font-size:15px;
+}
+.install-step-body{
+  font-size:14px;
+  color:var(--muted);
 }
 .install-note{
-  margin:6px 0 0;
+  margin:10px 0 0;
+  font-size:13px;
+  color:var(--muted);
+}
+
+/* Big install action button for supported Android browsers */
+.install-now-btn{
+  margin-top:14px;
+  width:100%;
+  border-radius:12px;
+  border:1px solid rgba(34,197,94,.45);
+  background:#052814;
+  color:#bbf7d0;
+  font-size:16px;
+  font-weight:700;
+  padding:12px 14px;
+  cursor:pointer;
+}
+.install-now-btn:active{
+  transform:scale(.98);
+}
+.install-small-hint{
+  margin-top:6px;
+  font-size:12px;
+  color:var(--muted);
+  text-align:center;
 }

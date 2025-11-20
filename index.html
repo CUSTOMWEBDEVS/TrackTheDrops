@@ -39,18 +39,12 @@
   <div class="install-shell" id="installShell" aria-hidden="true">
     <div class="install-panel" id="installPanel" role="dialog" aria-modal="true" aria-labelledby="installTitle">
       <button class="install-close" id="installClose" type="button" aria-label="Close install help">×</button>
-      <h2 id="installTitle">Get TrackTheDrop on your home screen</h2>
-      <p class="install-intro">Choose what you&rsquo;re using so we can show the right steps:</p>
-
-      <div class="install-grid">
-        <button class="install-os" type="button" data-os="ios">iPhone / iPad</button>
-        <button class="install-os" type="button" data-os="android">Android</button>
-        <button class="install-os" type="button" data-os="other">Other</button>
-      </div>
+      <h2 id="installTitle">Add TrackTheDrop to your phone</h2>
+      <p class="install-env" id="installEnv">Detecting your phone…</p>
 
       <div class="install-steps" id="installSteps">
         <p class="install-note">
-          After you add it, TrackTheDrop runs full-screen and offline like a native app.
+          You&rsquo;ll get a home screen icon you can tap like any other app. Works offline once added.
         </p>
       </div>
     </div>
@@ -62,7 +56,7 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
         navigator.serviceWorker.register('./sw.js').catch(function () {
-          // silent fail, not worth bothering the user
+          // silent fail
         });
       });
     }

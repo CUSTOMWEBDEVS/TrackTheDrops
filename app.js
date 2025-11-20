@@ -21,6 +21,7 @@
     installShell:$('installShell'),
     installSteps:$('installSteps'),
     installClose:$('installClose'),
+    installEnv:$('installEnv')
   };
 
   const setStatus=s=>{ if(el.status) el.status.textContent=s };
@@ -258,7 +259,7 @@
 
   // If we’re already running as an installed app, hide the install button.
   const isStandalone =
-    window.matchMedia && window.matchMedia('(display-mode: standalone)').matches ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
     (window.navigator && window.navigator.standalone);
   if (isStandalone && el.installBtn) {
     el.installBtn.style.display='none';
@@ -276,8 +277,49 @@
     }
   });
 
+  function detectEnv(){
+    const ua = navigator.userAgent.toLowerCase();
+    const isAndroid = ua.includes('android');
+    const isIOS = /iphone|ipad|ipod/.test(ua);
+    let browser = 'unknown';
+
+    if (ua.includes('duckduckgo')) browser = 'duckduckgo';
+    else if (ua.includes('samsungbrowser')) browser = 'samsung';
+    else if (ua.includes('firefox')) browser = 'firefox';
+    else if (ua.includes('opr') || ua.includes('opera')) browser = 'opera';
+    else if (ua.includes('crios') && isIOS) browser = 'chrome-ios';
+    else if (ua.includes('chrome') && ua.includes('safari')) browser = 'chrome';
+    else if (ua.includes('safari')) browser = 'safari';
+
+    const os = isAndroid ? 'android' : (isIOS ? 'ios' : 'other');
+
+    return { os, browser };
+  }
+
   function openInstallHelp(){
     if(!el.installShell) return;
+    const env = detectEnv();
+    if (el.installEnv) {
+      let label = 'We could not detect your phone.';
+      if (env.os === 'android') {
+        if (env.browser === 'duckduckgo') label = 'We think you are on: Android — DuckDuckGo browser';
+        else if (env.browser === 'chrome') label = 'We think you are on: Android — Chrome browser';
+        else if (env.browser === 'samsung') label = 'We think you are on: Android — Samsung Internet';
+        else if (env.browser === 'firefox') label = 'We think you are on: Android — Firefox browser';
+        else if (env.browser === 'opera') label = 'We think you are on: Android — Opera browser';
+        else label = 'We think you are on: Android phone';
+      } else if (env.os === 'ios') {
+        if (env.browser === 'safari') label = 'We think you are on: iPhone — Safari browser';
+        else if (env.browser === 'chrome-ios') label = 'We think you are on: iPhone — Chrome app';
+        else label = 'We think you are on: iPhone / iPad';
+      } else {
+        label = 'We think you are on: Other device';
+      }
+      el.installEnv.textContent = label;
+    }
+
+    renderInstallSteps(env);
+
     el.installShell.classList.add('show');
     el.installShell.setAttribute('aria-hidden','false');
   }
@@ -285,6 +327,150 @@
     if(!el.installShell) return;
     el.installShell.classList.remove('show');
     el.installShell.setAttribute('aria-hidden','true');
+  }
+
+  function renderInstallSteps(env){
+    if (!el.installSteps) return;
+
+    // Clear previous content
+    el.installSteps.innerHTML = '';
+
+    const wrapper = document.createElement('div');
+
+    // Android + Chrome (and compatible) with beforeinstallprompt: give big install button
+    if (env.os === 'android' && (env.browser === 'chrome' || env.browser === 'samsung' || env.browser === 'opera') && deferredPrompt) {
+      wrapper.innerHTML =
+        '<div class="install-step-title">Quick install (recommended)</div>' +
+        '<ol>' +
+          '<li><span class="install-step-body">Tap the big green button below.</span></li>' +
+          '<li><span class="install-step-body">When the box pops up, tap <strong>Install</strong> or <strong>Add</strong>.</span></li>' +
+        '</ol>' +
+        '<button class="install-now-btn" id="installNowBtn">⬇️  Tap here to add TrackTheDrop</button>' +
+        '<div class="install-small-hint">Your phone will drop an icon on your home screen like a normal app.</div>';
+      el.installSteps.appendChild(wrapper);
+
+      const btn = document.getElementById('installNowBtn');
+      if (btn) {
+        btn.addEventListener('click', async () => {
+          try {
+            deferredPrompt.prompt();
+            const choice = await deferredPrompt.userChoice;
+            if (choice && choice.outcome === 'accepted') {
+              el.installSteps.innerHTML =
+                '<p class="install-note">Nice. Look for the new <strong>TrackTheDrop</strong> icon on your home screen. You can open it from there like a normal app.</p>';
+            } else {
+              el.installSteps.innerHTML =
+                '<p class="install-note">If you changed your mind, open your browser menu and choose <strong>Install app</strong> or <strong>Add to Home screen</strong>.</p>';
+            }
+          } catch(_){}
+          deferredPrompt = null;
+        });
+      }
+      return;
+    }
+
+    // Android + DuckDuckGo: manual steps
+    if (env.os === 'android' && env.browser === 'duckduckgo') {
+      wrapper.innerHTML =
+        '<div class="install-step-title">Steps for DuckDuckGo on Android</div>' +
+        '<ol>' +
+          '<li>' +
+            '<span class="install-step-body">Look at the top-right of the screen and tap the <strong>⋮ three dots</strong> menu.</span>' +
+          '</li>' +
+          '<li>' +
+            '<span class="install-step-body">In that menu, tap <strong>Add to Home screen</strong> or <strong>Add to Home Screen (shortcut)</strong>.</span>' +
+          '</li>' +
+          '<li>' +
+            '<span class="install-step-body">If it asks for a name, leave it as <strong>TrackTheDrop</strong> and tap <strong>Add</strong>.</span>' +
+          '</li>' +
+          '<li>' +
+            '<span class="install-step-body">Go back to your phone\'s main screen. You should see a new <strong>TrackTheDrop</strong> icon you can tap.</span>' +
+          '</li>' +
+        '</ol>' +
+        '<p class="install-note">Once you see the icon, you can open it even with bad service — the app works offline after the first load.</p>';
+      el.installSteps.appendChild(wrapper);
+      return;
+    }
+
+    // Generic Android manual steps (Chrome / Firefox / Samsung / etc. when no prompt)
+    if (env.os === 'android') {
+      wrapper.innerHTML =
+        '<div class="install-step-title">Steps for Android phone</div>' +
+        '<ol>' +
+          '<li>' +
+            '<span class="install-step-body">Find the <strong>menu button</strong> in your browser (it\'s usually <strong>⋮ three dots</strong> in the top-right).</span>' +
+          '</li>' +
+          '<li>' +
+            '<span class="install-step-body">Tap it, then look for <strong>Add to Home screen</strong> or <strong>Install app</strong>.</span>' +
+          '</li>' +
+          '<li>' +
+            '<span class="install-step-body">If it asks for a name, use <strong>TrackTheDrop</strong> and tap <strong>Add</strong>.</span>' +
+          '</li>' +
+          '<li>' +
+            '<span class="install-step-body">Go to your phone\'s main screen and look for the new <strong>TrackTheDrop</strong> icon.</span>' +
+          '</li>' +
+        '</ol>' +
+        '<p class="install-note">Open it from the icon next time instead of the browser. It will run full-screen and keep working in the woods.</p>';
+      el.installSteps.appendChild(wrapper);
+      return;
+    }
+
+    // iOS Safari
+    if (env.os === 'ios' && env.browser === 'safari') {
+      wrapper.innerHTML =
+        '<div class="install-step-title">Steps for iPhone (Safari)</div>' +
+        '<ol>' +
+          '<li>' +
+            '<span class="install-step-body">At the bottom of Safari, tap the <strong>square with the ↑ arrow</strong> (the Share button).</span>' +
+          '</li>' +
+          '<li>' +
+            '<span class="install-step-body">Scroll the list and tap <strong>Add to Home Screen</strong>.</span>' +
+          '</li>' +
+          '<li>' +
+            '<span class="install-step-body">Leave the name as <strong>TrackTheDrop</strong> and tap <strong>Add</strong> in the top-right.</span>' +
+          '</li>' +
+          '<li>' +
+            '<span class="install-step-body">Go back to your home screen. You\'ll see a new <strong>TrackTheDrop</strong> icon.</span>' +
+          '</li>' +
+        '</ol>' +
+        '<p class="install-note">Always open the app from that icon. It will run full-screen and work even when service is spotty.</p>';
+      el.installSteps.appendChild(wrapper);
+      return;
+    }
+
+    // iOS Chrome or unknown iOS: still must use Safari UI
+    if (env.os === 'ios') {
+      wrapper.innerHTML =
+        '<div class="install-step-title">Best way on iPhone</div>' +
+        '<ol>' +
+          '<li>' +
+            '<span class="install-step-body">First, open this same page in <strong>Safari</strong> (Apple\'s built-in browser).</span>' +
+          '</li>' +
+          '<li>' +
+            '<span class="install-step-body">In Safari, tap the <strong>square with the ↑ arrow</strong> at the bottom.</span>' +
+          '</li>' +
+          '<li>' +
+            '<span class="install-step-body">Tap <strong>Add to Home Screen</strong>, then <strong>Add</strong>.</span>' +
+          '</li>' +
+          '<li>' +
+            '<span class="install-step-body">Now you will have a <strong>TrackTheDrop</strong> icon on your home screen.</span>' +
+          '</li>' +
+        '</ol>' +
+        '<p class="install-note">Apple only lets this work properly from Safari, not other browsers.</p>';
+      el.installSteps.appendChild(wrapper);
+      return;
+    }
+
+    // Other devices
+    wrapper.innerHTML =
+      '<div class="install-step-title">General steps</div>' +
+      '<ol>' +
+        '<li><span class="install-step-body">Open your browser\'s main menu.</span></li>' +
+        '<li><span class="install-step-body">Look for <strong>Add to Home screen</strong> or <strong>Install app</strong>.</span></li>' +
+        '<li><span class="install-step-body">Confirm the name and add it.</span></li>' +
+      '</ol>' +
+      '<p class="install-note">After that, launch TrackTheDrop from your home screen instead of from the browser.</p>';
+    el.installSteps.appendChild(wrapper);
   }
 
   el.installBtn?.addEventListener('click', ev=>{
@@ -302,61 +488,6 @@
     ev.stopPropagation();
     closeInstallHelp();
   }, true);
-
-  const osButtons=document.querySelectorAll('.install-os[data-os]');
-  osButtons.forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      if(!el.installSteps) return;
-      const os=btn.dataset.os;
-      if(os==='android'){
-        // Try the real PWA install prompt if we caught it
-        if(deferredPrompt){
-          try{
-            deferredPrompt.prompt();
-            const choice=await deferredPrompt.userChoice;
-            if(choice && choice.outcome==='accepted'){
-              el.installSteps.innerHTML=
-                '<p>Nice. Your browser will add TrackTheDrop to your home screen. ' +
-                'After that you can close this tab and launch it from the icon like any other app.</p>';
-            }else{
-              el.installSteps.innerHTML=
-                '<p>If you skipped the dialog, you can still install manually: open your browser menu and pick ' +
-                '<strong>Install app</strong> or <strong>Add to Home screen</strong>.</p>';
-            }
-          }catch(_){}
-          deferredPrompt=null;
-        }else{
-          // Fallback manual steps
-          el.installSteps.innerHTML=
-            '<ol>' +
-              '<li>Open this page in <strong>Chrome</strong> on your phone.</li>' +
-              '<li>Tap the <strong>⋮</strong> menu (top-right).</li>' +
-              '<li>Choose <strong>Install app</strong> or <strong>Add to Home screen</strong>.</li>' +
-              '<li>Confirm the name and tap <strong>Add</strong>.</li>' +
-            '</ol>';
-        }
-      }else if(os==='ios'){
-        // iOS: Safari only, manual.
-        el.installSteps.innerHTML=
-          '<ol>' +
-            '<li>Open this page in <strong>Safari</strong>.</li>' +
-            '<li>Tap the <strong>Share</strong> button (square with an up arrow).</li>' +
-            '<li>Scroll and tap <strong>Add to Home Screen</strong>.</li>' +
-            '<li>Tap <strong>Add</strong> in the top right.</li>' +
-          '</ol>' +
-          '<p>After that TrackTheDrop will live on your home screen and run full-screen offline.</p>';
-      }else{
-        // Other browsers/platforms
-        el.installSteps.innerHTML=
-          '<ol>' +
-            '<li>Open this page in your browser.</li>' +
-            '<li>Open the main menu.</li>' +
-            '<li>Look for <strong>Install app</strong> or <strong>Add to Home screen</strong>.</li>' +
-            '<li>Confirm to add the icon.</li>' +
-          '</ol>';
-      }
-    });
-  });
 
   setStatus('Booting… (relaxed strict)');
   window.__TTD__={
