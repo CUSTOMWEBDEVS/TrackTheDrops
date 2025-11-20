@@ -7,7 +7,11 @@
     content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no"
   />
   <meta name="theme-color" content="#0b0e13" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="TrackTheDrop" />
   <title>TrackTheDrop — Mobile</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
@@ -26,11 +30,42 @@
         <button class="tool" id="startBtn" type="button">Start</button>
         <button class="tool" id="torchBtn" type="button">Flashlight</button>
         <button class="tool alert" id="alertBtn" aria-pressed="true" type="button">Alert: On</button>
+        <button class="tool secondary" id="installBtn" type="button">Get the app</button>
       </nav>
     </section>
   </main>
 
-  <!-- No SW registration here to avoid cache confusion -->
+  <!-- Install / Add to Home Screen helper -->
+  <div class="install-shell" id="installShell" aria-hidden="true">
+    <div class="install-panel" id="installPanel" role="dialog" aria-modal="true" aria-labelledby="installTitle">
+      <button class="install-close" id="installClose" type="button" aria-label="Close install help">×</button>
+      <h2 id="installTitle">Get TrackTheDrop on your home screen</h2>
+      <p class="install-intro">Choose what you&rsquo;re using so we can show the right steps:</p>
+
+      <div class="install-grid">
+        <button class="install-os" type="button" data-os="ios">iPhone / iPad</button>
+        <button class="install-os" type="button" data-os="android">Android</button>
+        <button class="install-os" type="button" data-os="other">Other</button>
+      </div>
+
+      <div class="install-steps" id="installSteps">
+        <p class="install-note">
+          After you add it, TrackTheDrop runs full-screen and offline like a native app.
+        </p>
+      </div>
+    </div>
+  </div>
+
   <script defer src="./app.js"></script>
+  <script>
+    // Register the service worker so we actually behave as an installable PWA
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('./sw.js').catch(function () {
+          // silent fail, not worth bothering the user
+        });
+      });
+    }
+  </script>
 </body>
 </html>

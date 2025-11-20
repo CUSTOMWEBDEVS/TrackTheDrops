@@ -15,13 +15,101 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:g
 .hud{position:absolute;left:10px;top:10px;display:flex;gap:8px;align-items:center;
   font-size:12px;color:#d7deef;background:rgba(12,17,25,.60);padding:6px 10px;border-radius:14px;border:1px solid var(--line);z-index:6}
 
-.toolbar{position:absolute;bottom:10px;left:10px;right:10px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;z-index:6;
+.toolbar{position:absolute;bottom:10px;left:10px;right:10px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;z-index:6;
   background:var(--toolbar);backdrop-filter:blur(var(--blur));border:1px solid var(--line);padding:10px;border-radius:16px}
 .tool{font-size:14px;font-weight:600;border:1px solid var(--line);background:rgba(12,18,28,.72);color:var(--ink);padding:12px;border-radius:12px;cursor:pointer}
 .tool:active{transform:scale(.98)}
+
+/* Secondary / install button */
+.tool.secondary{
+  border-style:dashed;
+  font-weight:500;
+  opacity:.9;
+}
 
 /* Alert button colors */
 .tool.alert{border-color:rgba(34,197,94,.45); color:var(--ok);}
 .tool.alert[aria-pressed="false"]{border-color:rgba(156,163,175,.45); color:#cbd5e1;}
 .tool.alert::after{content:'';display:inline-block;width:8px;height:8px;border-radius:999px;margin-left:8px;background:var(--ok);box-shadow:0 0 0 2px rgba(34,197,94,.25)}
 .tool.alert[aria-pressed="false"]::after{background:#94a3b8; box-shadow:0 0 0 2px rgba(148,163,184,.2)}
+
+/* Install / Add-to-home-screen UI */
+.install-shell{
+  position:fixed;
+  inset:0;
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+  background:rgba(0,0,0,.55);
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .2s ease;
+  z-index:20;
+}
+.install-shell.show{
+  opacity:1;
+  pointer-events:auto;
+}
+@media (min-width:640px){
+  .install-shell{
+    align-items:center;
+  }
+}
+.install-panel{
+  position:relative;
+  width:100%;
+  max-width:480px;
+  background:var(--panel);
+  border-radius:18px 18px 0 0;
+  padding:16px 16px 18px;
+  box-shadow:0 16px 40px rgba(0,0,0,.65);
+  border:1px solid var(--line);
+}
+@media (min-width:640px){
+  .install-panel{
+    border-radius:18px;
+  }
+}
+.install-close{
+  position:absolute;
+  top:10px;
+  right:18px;
+  background:none;
+  border:none;
+  color:var(--muted);
+  font-size:20px;
+  cursor:pointer;
+}
+.install-intro{
+  margin:8px 0 12px;
+  font-size:14px;
+  color:var(--muted);
+}
+.install-grid{
+  display:flex;
+  gap:8px;
+  margin-bottom:12px;
+}
+.install-os{
+  flex:1;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:#050914;
+  color:var(--ink);
+  padding:8px 10px;
+  font-size:13px;
+  font-weight:500;
+  cursor:pointer;
+}
+.install-steps{
+  font-size:13px;
+  color:var(--muted);
+  line-height:1.4;
+}
+.install-steps ol{
+  padding-left:18px;
+  margin:6px 0 0;
+}
+.install-note{
+  margin:6px 0 0;
+}
